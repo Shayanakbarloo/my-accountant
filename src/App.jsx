@@ -29,9 +29,11 @@ function App() { // a component. In React, a component is just a function that r
         value = { hours} 
         onChange = {(e) => setHours(e.target.value)} />
       </label>
-      
+
       {/* this recalculates itself every time rate changes */}
       <h2>${weekly} per week </h2>
+      <h2> ${monthly} per month </h2>
+      <h2> ${yearly} per year </h2>
     </div>
   );
 }
