@@ -20,3 +20,39 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.page{
+  max-width: 680px;
+  margin: 0 auto; 
+  padding: 60px 22px; 
+}
+
+h1{ 
+  font-size: 48px; 
+  font-weight: 600; 
+  letter-spacing: -0.03em; 
+  margin: 0 0 8px; 
+}
+.tagline{
+  color: var(--sub);
+  font-size: 17 px; 
+  margin: 0 0 40 px; 
+}
+
+.card{
+  background: #fff; 
+  border-radius: 16px; 
+  padding: 28px;
+  margin-bottom: 20x
+}
+
+.field{
+  display: block; 
+  margin-bottom: 20ox; 
+}
+
+.field span{ 
+  display: block;
+  font-size: 13px; 
+  color: var(--sub);
+  margin-bottom: 8px;
+}
