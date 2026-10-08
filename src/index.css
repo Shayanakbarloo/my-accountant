@@ -56,3 +56,69 @@ h1{
   color: var(--sub);
   margin-bottom: 8px;
 }
+
+input{
+  width: 100%; 
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 17px;
+  font-family: inherit;
+  background: #fff;
+  color:var(--ink);
+  outline: none; 
+}
+
+/* :focus means "while the cursor is in this box" */
+input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+}
+
+button{
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 17px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.85;
+}
+
+.remove{
+  background: var(--red);
+  color: var(--sub); 
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.figure{
+  font-size: 44px;
+  font-weight: 600; 
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.figure-label{
+  font-size: 13px;
+  color: var(--sub);
+  margin: 0 0 4px;
+}
+
+.sub-row {
+  display: flex;                    /* lay children in a row */
+  justify-content: space-between;   /* push them to opposite ends */
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hair);
+}
+ .add-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
