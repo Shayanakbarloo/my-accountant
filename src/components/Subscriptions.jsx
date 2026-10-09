@@ -14,30 +14,25 @@ function Subscriptions({ subs, onAdd, onRemove }) {
     setNewCost("");
   }
 
-  return (
+   return (
     <div>
       <h3>Subscriptions</h3>
-      <ul>
-        {subs.map((sub, index) => (
-          <li key={index}>
-            {sub.name} — {money(sub.cost)}
-            <button onClick={() => onRemove(index)}>Remove</button>
-          </li>
-        ))}
-      </ul>
 
-      <input
-        placeholder="Name"
-        value={newName}
-        onChange={(e) => setNewName(e.target.value)}
-      />
-      <input
-        type="number"
-        placeholder="Cost"
-        value={newCost}
-        onChange={(e) => setNewCost(e.target.value)}
-      />
-      <button onClick={handleAdd}>Add subscription</button>
+      {subs.map((sub, index) => (
+        <div className="sub-row" key={index}>
+          <span>{sub.name}</span>
+          <span>
+            {money(sub.cost)}
+            <button className="remove" onClick={() => onRemove(index)}>Remove</button>
+          </span>
+        </div>
+      ))}
+
+      <div className="add-row">
+        <input placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+        <input type="number" placeholder="Cost" value={newCost} onChange={(e) => setNewCost(e.target.value)} />
+        <button onClick={handleAdd}>Add</button>
+      </div>
     </div>
   );
 }
