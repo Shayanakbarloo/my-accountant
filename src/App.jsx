@@ -16,37 +16,41 @@ function App() {
   const leftOver = monthly - subsTotal;
 
   return (
-    <div>
+    <div className="page">
       <h1>My Accountant</h1>
+      <p className="tagline">Know what you keep. Plan what's next.</p>
 
-      <label>
-        How much do you earn per hour?
-        <input
-          type="number"
-          value={rate}
-          onChange={(e) => setRate(e.target.value)}
+      <div className="card">
+        <label className="field">
+          <span>How much do you earn per hour?</span>
+          <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
+        </label>
+
+        <label className="field">
+          <span>How many hours do you work per week?</span>
+          <input type="number" value={hours} onChange={(e) => setHours(e.target.value)} />
+        </label>
+      </div>
+
+      <div className="card">
+        <p className="figure-label">You earn</p>
+        <p className="figure">{money(monthly)}</p>
+        <p className="figure-label">a month, before anything comes out</p>
+      </div>
+
+      <div className="card">
+        <Subscriptions
+          subs={subs}
+          onAdd={(sub) => setSubs([...subs, sub])}
+          onRemove={(index) => setSubs(subs.filter((s, i) => i !== index))}
         />
-      </label>
+      </div>
 
-      <label>
-        How many hours do you work per week?
-        <input
-          type="number"
-          value={hours}
-          onChange={(e) => setHours(e.target.value)}
-        />
-      </label>
-
-      <h2>{money(monthly)} per month</h2>
-
-      <Subscriptions
-        subs={subs}
-        onAdd={(sub) => setSubs([...subs, sub])}
-        onRemove={(index) => setSubs(subs.filter((s, i) => i !== index))}
-      />
-
-      <h2>{money(subsTotal)} a month on subscriptions</h2>
-      <h2>{money(leftOver)} left over</h2>
+      <div className="card">
+        <p className="figure-label">After subscriptions</p>
+        <p className="figure">{money(leftOver)}</p>
+        <p className="figure-label">{money(subsTotal)} a month on subscriptions</p>
+      </div>
     </div>
   );
 }
