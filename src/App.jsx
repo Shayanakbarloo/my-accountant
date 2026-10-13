@@ -1,19 +1,45 @@
 import { useState } from "react";
 import { money } from "./lib/format.js";
 import Subscriptions from "./components/Subscriptions.jsx";
-
+import {useEffect} from "react";
+import { yearlyDeductions } from "./lib/tax.js";
+function loadSaved() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("my-accountant"));
+    if (saved) return saved;
+  } catch (e) {
+   
+  }
+  return {
+    rate: "",
+    hours: "",
+    subs: [
+      { name: "Netflix", cost: 17 },
+      { name: "Spotify", cost: 11 },
+    ],
+  };
+}
 function App() {
-  const [rate, setRate] = useState("");
-  const [hours, setHours] = useState("");
-  const [subs, setSubs] = useState([
-    { name: "Netflix", cost: 17 },
-    { name: "Spotify", cost: 11 },
-  ]);
+  const [rate, setRate] = useState(loadSaved().rate);
+  const [hours, setHours] = useState(loadSaved().hours);
+  const [subs, setSubs] = useState(loadSaved().subs);
+
+  useEffect(() => {
+    localStorage.setItem("my-accountant", JSON.stringify({ rate, hours, subs }));
+  }, [rate, hours, subs]);
 
   const weekly = (Number(rate) || 0) * (Number(hours) || 0);
   const monthly = weekly * 4;
+
+  // Tax is based on what you ACTUALLY earn in a year — 52 weeks, not your
+  // 4-week months. Work out the real rate, then apply it to the display figures.
+  const trueYearly = weekly * 52;
+  const deductions = yearlyDeductions(trueYearly);
+  const taxRate = trueYearly > 0 ? deductions.total / trueYearly : 0;
+
+  const takeHomeMonthly = monthly * (1 - taxRate);
   const subsTotal = subs.reduce((total, sub) => total + sub.cost, 0);
-  const leftOver = monthly - subsTotal;
+  const leftOver = takeHomeMonthly - subsTotal;
 
   return (
     <div className="page">
