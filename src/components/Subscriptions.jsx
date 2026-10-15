@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { money } from "../lib/format.js";
 
-// subs, onAdd and onRemove are props — passed down from App.jsx
 function Subscriptions({ subs, onAdd, onRemove }) {
-  // These two only matter inside this component, so they live here
   const [newName, setNewName] = useState("");
   const [newCost, setNewCost] = useState("");
 
@@ -23,25 +21,14 @@ function Subscriptions({ subs, onAdd, onRemove }) {
           <span>{sub.name}</span>
           <span>
             {money(sub.cost)}
-            <button className="remove" onClick={() => onRemove(index)}>
-              Remove
-            </button>
+            <button className="remove" onClick={() => onRemove(index)}>Remove</button>
           </span>
         </div>
       ))}
 
       <div className="add-row">
-        <input
-          placeholder="Name"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="Cost"
-          value={newCost}
-          onChange={(e) => setNewCost(e.target.value)}
-        />
+        <input placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+        <input type="number" placeholder="Cost" value={newCost} onChange={(e) => setNewCost(e.target.value)} />
         <button onClick={handleAdd}>Add</button>
       </div>
     </div>
