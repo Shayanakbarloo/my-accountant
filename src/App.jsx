@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { money } from "./lib/format.js";
 import { yearlyDeductions } from "./lib/tax.js";
 import Subscriptions from "./components/Subscriptions.jsx";
+import Goals from "./components/Goals.jsx";
 
 // Runs once when the file loads. Reads whatever was saved last time.
 function loadSaved() {
