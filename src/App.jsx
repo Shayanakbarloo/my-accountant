@@ -5,12 +5,13 @@ import Subscriptions from "./components/Subscriptions.jsx";
 import Goals from "./components/Goals.jsx";
 import Debts from "./components/Debts.jsx";
 
+// Runs once when the file loads. Reads whatever was saved last time.
 function loadSaved() {
   try {
     const saved = JSON.parse(localStorage.getItem("my-accountant"));
     if (saved) return saved;
   } catch (e) {
-    // corrupted save — fall back to defaults
+    // Saved data was corrupted — fall back to defaults instead of crashing.
   }
   return {
     rate: "",
@@ -20,6 +21,7 @@ function loadSaved() {
       { name: "Spotify", cost: 11 },
     ],
     goals: [],
+    debts: [],
   };
 }
 
@@ -33,12 +35,17 @@ function App() {
   const [debts, setDebts] = useState(saved.debts || []);
 
   useEffect(() => {
-    localStorage.setItem("my-accountant", JSON.stringify({ rate, hours, subs, goals, debts }));
+    localStorage.setItem(
+      "my-accountant",
+      JSON.stringify({ rate, hours, subs, goals, debts })
+    );
   }, [rate, hours, subs, goals, debts]);
 
   const weekly = (Number(rate) || 0) * (Number(hours) || 0);
   const monthly = weekly * 4;
 
+  // Tax applies to what you really earn in a year — 52 weeks, not 4-week
+  // months. Work out the real rate there, then apply it to the display figures.
   const trueYearly = weekly * 52;
   const deductions = yearlyDeductions(trueYearly);
   const taxRate = trueYearly > 0 ? deductions.total / trueYearly : 0;
@@ -55,12 +62,20 @@ function App() {
       <div className="card">
         <label className="field">
           <span>How much do you earn per hour?</span>
-          <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
+          <input
+            type="number"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
         </label>
 
         <label className="field">
           <span>How many hours do you work per week?</span>
-          <input type="number" value={hours} onChange={(e) => setHours(e.target.value)} />
+          <input
+            type="number"
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+          />
         </label>
       </div>
 
@@ -89,16 +104,9 @@ function App() {
       <div className="card">
         <p className="figure-label">After subscriptions</p>
         <p className="figure">{money(leftOver)}</p>
-        <p className="figure-label">{money(subsTotal)} a month on subscriptions</p>
-      </div>
-
-      <div className="card">
-        <Goals
-          goals={goals}
-          freeMonthly={leftOver}
-          onAdd={(goal) => setGoals([...goals, { ...goal, id: Date.now() }])}
-          onRemove={(id) => setGoals(goals.filter((g) => g.id !== id))}
-        />
+        <p className="figure-label">
+          {money(subsTotal)} a month on subscriptions
+        </p>
       </div>
 
       <div className="card">
@@ -107,6 +115,15 @@ function App() {
           freeMonthly={leftOver}
           onAdd={(debt) => setDebts([...debts, { ...debt, id: Date.now() }])}
           onRemove={(id) => setDebts(debts.filter((d) => d.id !== id))}
+        />
+      </div>
+
+      <div className="card">
+        <Goals
+          goals={goals}
+          freeMonthly={leftOver}
+          onAdd={(goal) => setGoals([...goals, { ...goal, id: Date.now() }])}
+          onRemove={(id) => setGoals(goals.filter((g) => g.id !== id))}
         />
       </div>
     </div>
