@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { money } from "./lib/format.js";
 import { yearlyDeductions } from "./lib/tax.js";
+import { planForDebt } from "./lib/Debt.js";
 import Subscriptions from "./components/Subscriptions.jsx";
 import Goals from "./components/Goals.jsx";
 import Debts from "./components/Debts.jsx";
@@ -53,6 +54,15 @@ function App() {
   const takeHomeMonthly = monthly * (1 - taxRate);
   const subsTotal = subs.reduce((total, sub) => total + sub.cost, 0);
   const leftOver = takeHomeMonthly - subsTotal;
+
+  // What every debt costs you each month, added up.
+  const debtCost = debts.reduce(
+    (total, debt) => total + planForDebt(debt, leftOver).payment,
+    0
+  );
+
+  // Goals compete with debts for the same money, so they only get what's left.
+  const freeForGoals = leftOver - debtCost;
 
   return (
     <div className="page">
@@ -119,9 +129,24 @@ function App() {
       </div>
 
       <div className="card">
+        <p className="figure-label">After debt payments</p>
+        <p
+          className="figure"
+          style={{ color: freeForGoals < 0 ? "var(--red)" : undefined }}
+        >
+          {money(freeForGoals)}
+        </p>
+        <p className="figure-label">
+          {freeForGoals < 0
+            ? "You're committed to more than you have."
+            : "a month, free for goals and spending"}
+        </p>
+      </div>
+
+      <div className="card">
         <Goals
           goals={goals}
-          freeMonthly={leftOver}
+          freeMonthly={freeForGoals}
           onAdd={(goal) => setGoals([...goals, { ...goal, id: Date.now() }])}
           onRemove={(id) => setGoals(goals.filter((g) => g.id !== id))}
         />
