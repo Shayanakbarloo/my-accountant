@@ -3,6 +3,7 @@ import { money } from "./lib/format.js";
 import { yearlyDeductions } from "./lib/tax.js";
 import Subscriptions from "./components/Subscriptions.jsx";
 import Goals from "./components/Goals.jsx";
+import Debts from "./components/Debts.jsx";
 
 function loadSaved() {
   try {
@@ -29,10 +30,11 @@ function App() {
   const [hours, setHours] = useState(saved.hours);
   const [subs, setSubs] = useState(saved.subs);
   const [goals, setGoals] = useState(saved.goals || []);
+  const [debts, setDebts] = useState(saved.debts || []);
 
   useEffect(() => {
-    localStorage.setItem("my-accountant", JSON.stringify({ rate, hours, subs, goals }));
-  }, [rate, hours, subs, goals]);
+    localStorage.setItem("my-accountant", JSON.stringify({ rate, hours, subs, goals, debts }));
+  }, [rate, hours, subs, goals, debts]);
 
   const weekly = (Number(rate) || 0) * (Number(hours) || 0);
   const monthly = weekly * 4;
@@ -96,6 +98,15 @@ function App() {
           freeMonthly={leftOver}
           onAdd={(goal) => setGoals([...goals, { ...goal, id: Date.now() }])}
           onRemove={(id) => setGoals(goals.filter((g) => g.id !== id))}
+        />
+      </div>
+
+      <div className="card">
+        <Debts
+          debts={debts}
+          freeMonthly={leftOver}
+          onAdd={(debt) => setDebts([...debts, { ...debt, id: Date.now() }])}
+          onRemove={(id) => setDebts(debts.filter((d) => d.id !== id))}
         />
       </div>
     </div>
