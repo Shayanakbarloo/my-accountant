@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { money } from "./lib/format.js";
-import { yearlyDeductions } from "./lib/tax.js";
+import { yearlyDeductions, PROVINCES } from "./lib/tax.js";
+import { monthlyCost } from "./lib/subscriptions.js";
 import { planForDebt, planForGoal } from "./lib/Debt.js";
 import Subscriptions from "./components/Subscriptions.jsx";
 import Debts from "./components/Debts.jsx";
@@ -19,6 +20,7 @@ function loadSaved() {
   return {
     rate: "",
     hours: "",
+    province: "ON",
     subs: [
       { id: 1, name: "Netflix", cost: 17 },
       { id: 2, name: "Spotify", cost: 11 },
@@ -42,6 +44,7 @@ function withIds(list) {
 function App() {
   const [rate, setRate] = useState(saved.rate);
   const [hours, setHours] = useState(saved.hours);
+  const [province, setProvince] = useState(saved.province || "ON");
   const [subs, setSubs] = useState(withIds(saved.subs));
   const [debts, setDebts] = useState(withIds(saved.debts));
   const [goals, setGoals] = useState(withIds(saved.goals));
@@ -50,9 +53,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem(
       "my-accountant",
-      JSON.stringify({ rate, hours, subs, debts, goals })
+      JSON.stringify({ rate, hours, province, subs, debts, goals })
     );
-  }, [rate, hours, subs, debts, goals]);
+  }, [rate, hours, province, subs, debts, goals]);
 
   /* ---------- the money, worked out in order ---------- */
 
@@ -62,13 +65,13 @@ function App() {
   // Tax applies to what you really earn in a year — 52 weeks, not 4-week
   // months. Work out the real rate there, then apply it to the display figures.
   const trueYearly = weekly * 52;
-  const deductions = yearlyDeductions(trueYearly);
+  const deductions = yearlyDeductions(trueYearly, province);
   const taxRate = trueYearly > 0 ? deductions.total / trueYearly : 0;
 
   const takeHomeMonthly = monthly * (1 - taxRate);
   const taxCost = monthly - takeHomeMonthly;
 
-  const subsTotal = subs.reduce((total, sub) => total + sub.cost, 0);
+  const subsTotal = subs.reduce((total, sub) => total + monthlyCost(sub), 0);
   const leftOver = takeHomeMonthly - subsTotal;
 
   // What every debt costs you each month, added up.
@@ -117,7 +120,7 @@ function App() {
           />
         </label>
 
-        <label className="field" style={{ marginBottom: 0 }}>
+        <label className="field">
           <span>How many hours do you work per week?</span>
           <input
             type="number"
@@ -125,6 +128,23 @@ function App() {
             onChange={(e) => setHours(e.target.value)}
             placeholder="40"
           />
+        </label>
+
+        <label className="field" style={{ marginBottom: 0 }}>
+          <span>Where do you live?</span>
+          <select
+            value={province}
+            onChange={(e) => setProvince(e.target.value)}
+          >
+            {/* Sorted by name so the list reads alphabetically */}
+            {Object.entries(PROVINCES)
+              .sort((a, b) => a[1].name.localeCompare(b[1].name))
+              .map(([code, p]) => (
+                <option key={code} value={code}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
         </label>
       </div>
 
@@ -139,7 +159,30 @@ function App() {
         <p className="figure">{money(takeHomeMonthly)}</p>
         <p className="figure-label">
           {(taxRate * 100).toFixed(1)}% of your pay goes to tax and deductions
+          in {deductions.provinceName}
         </p>
+
+        {/* The breakdown, so the percentage above isn't just a mystery number */}
+        {monthly > 0 && (
+          <div style={{ marginTop: 20 }}>
+            {[
+              ["Federal tax", deductions.federal],
+              [`${deductions.provinceName} tax`, deductions.provincial],
+              [deductions.pensionLabel, deductions.cpp],
+              ["EI", deductions.ei],
+              ["QPIP", deductions.parental],
+            ]
+              .filter(([, amount]) => amount > 0)
+              .map(([label, amount]) => (
+                <div className="legend-row" key={label}>
+                  <span style={{ flex: 1 }}>{label}</span>
+                  <span className="muted">
+                    {money(amount / 12)} a month
+                  </span>
+                </div>
+              ))}
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -197,7 +240,7 @@ function App() {
       <p className="muted" style={{ fontSize: 12, textAlign: "center" }}>
         Estimates only — not tax or financial advice.
         <br />
-        Copyright © {new Date().getFullYear()} Shayan Akbarloo.
+        Copyright © {new Date().getFullYear()} Shayan Akabrloyshabghai.
       </p>
     </div>
   );
