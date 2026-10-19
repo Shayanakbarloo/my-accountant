@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { money } from "./lib/format.js";
 import { yearlyDeductions, PROVINCES } from "./lib/tax.js";
-import { monthlyCost } from "./lib/subscriptions.js";
+import { monthlyCost } from "./lib/Subscriptions.js";
 import { planForDebt, planForGoal } from "./lib/Debt.js";
 import Subscriptions from "./components/Subscriptions.jsx";
 import Debts from "./components/Debts.jsx";
