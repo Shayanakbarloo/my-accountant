@@ -90,6 +90,46 @@ function App() {
 
   const trulyFree = freeForGoals - goalCost;
 
+  /* ---------- what the donut shows ----------
+     Each slice carries the items inside it, so clicking one can open it up
+     and show which subscription, debt or goal is taking the biggest share. */
+  const chartSlices = [
+    {
+      name: "Tax And Deductions",
+      value: taxCost,
+      parts: [
+        { name: "Federal Tax", value: deductions.federal / 12 },
+        { name: deductions.provinceName + " Tax", value: deductions.provincial / 12 },
+        { name: deductions.pensionLabel, value: deductions.cpp / 12 },
+        { name: "EI", value: deductions.ei / 12 },
+        { name: "QPIP", value: deductions.parental / 12 },
+      ].filter((part) => part.value > 0),
+    },
+    {
+      name: "Subscriptions",
+      value: subsTotal,
+      parts: subs.map((sub) => ({ name: sub.name, value: monthlyCost(sub) })),
+    },
+    {
+      name: "Debt Payments",
+      value: debtCost,
+      parts: debts.map((debt) => ({
+        name: debt.name,
+        value: planForDebt(debt, leftOver).payment,
+      })),
+    },
+    {
+      name: "Saving Goals",
+      value: goalCost,
+      parts: goals.map((goal) => ({
+        name: goal.title,
+        value: planForGoal(goal, freeForGoals).perMonth,
+      })),
+    },
+    // Nothing to break this one into — it's whatever is left.
+    { name: "Free To Spend", value: Math.max(0, trulyFree), parts: [] },
+  ];
+
   /* ---------- list handlers ---------- */
   // One pattern, used three times: add appends, edit replaces by id,
   // remove filters by id. Each builds a NEW array rather than changing
@@ -186,14 +226,7 @@ function App() {
       </div>
 
       <div className="card">
-        <Breakdown
-          gross={monthly}
-          tax={taxCost}
-          subs={subsTotal}
-          debt={debtCost}
-          goals={goalCost}
-          free={Math.max(0, trulyFree)}
-        />
+        <Breakdown gross={monthly} slices={chartSlices} />
       </div>
 
       <div className="card">
