@@ -72,7 +72,19 @@ function ActiveSlice(props) {
  * slices: [{ name, value, parts: [{ name, value }] }]
  * A slice with parts can be clicked to open up and show what's inside it.
  */
-function Breakdown({ gross, slices }) {
+function Breakdown({ gross, slices, tax, subs, debt, goals, free }) {
+  // Older versions of App.jsx passed the five figures separately instead of
+  // a `slices` array. Accept either, so a half-applied update still draws.
+  if (!slices) {
+    slices = [
+      { name: "Tax And Deductions", value: tax, parts: [] },
+      { name: "Subscriptions", value: subs, parts: [] },
+      { name: "Debt Payments", value: debt, parts: [] },
+      { name: "Saving Goals", value: goals, parts: [] },
+      { name: "Free To Spend", value: free, parts: [] },
+    ];
+  }
+
   const [visible, setVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState(null);
   const [openIndex, setOpenIndex] = useState(null); // which category is open
@@ -103,11 +115,22 @@ function Breakdown({ gross, slices }) {
     );
 
     watcher.observe(box);
-    return () => watcher.disconnect();
+
+    // Fail-safe: if the observer never fires — because the chart was
+    // already on screen at load, or the browser behaves oddly — show it
+    // anyway rather than leaving it invisible forever.
+    const failsafe = setTimeout(() => setVisible(true), 1200);
+
+    return () => {
+      watcher.disconnect();
+      clearTimeout(failsafe);
+    };
   }, []);
 
   // Only include slices with something in them — a 0% slice looks broken
-  const top = (slices || []).filter((s) => s.value > 0);
+  const top = (slices || [])
+    .map((s) => ({ ...s, value: Number(s.value) || 0, parts: s.parts || [] }))
+    .filter((s) => s.value > 0);
   const grandTotal = top.reduce((sum, s) => sum + s.value, 0);
 
   // Without a wage there's no "whole" for the parts to divide up. Showing a
