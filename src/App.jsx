@@ -21,6 +21,7 @@ function loadSaved() {
     rate: "",
     hours: "",
     province: "ON",
+    payPeriod: "biweekly",
     subs: [
       { id: 1, name: "Netflix", cost: 17 },
       { id: 2, name: "Spotify", cost: 11 },
@@ -31,6 +32,15 @@ function loadSaved() {
 }
 
 const saved = loadSaved();
+
+// How often the money actually lands, and how many times a year that is.
+// These are real counts: 26 fortnights, 24 half-months, 12 months.
+const PAY_PERIODS = {
+  weekly:      { name: "Every Week",        perYear: 52 },
+  biweekly:    { name: "Every Two Weeks",   perYear: 26 },
+  semimonthly: { name: "Twice A Month",     perYear: 24 },
+  monthly:     { name: "Once A Month",      perYear: 12 },
+};
 
 // Older saves stored subscriptions without ids. Give them one on the way in
 // so editing and removing work on data from before that change.
@@ -45,6 +55,7 @@ function App() {
   const [rate, setRate] = useState(saved.rate);
   const [hours, setHours] = useState(saved.hours);
   const [province, setProvince] = useState(saved.province || "ON");
+  const [payPeriod, setPayPeriod] = useState(saved.payPeriod || "biweekly");
   const [subs, setSubs] = useState(withIds(saved.subs));
   const [debts, setDebts] = useState(withIds(saved.debts));
   const [goals, setGoals] = useState(withIds(saved.goals));
@@ -53,9 +64,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem(
       "my-accountant",
-      JSON.stringify({ rate, hours, province, subs, debts, goals })
+      JSON.stringify({ rate, hours, province, payPeriod, subs, debts, goals })
     );
-  }, [rate, hours, province, subs, debts, goals]);
+  }, [rate, hours, province, payPeriod, subs, debts, goals]);
 
   /* ---------- the money, worked out in order ---------- */
 
@@ -70,6 +81,15 @@ function App() {
 
   const takeHomeMonthly = monthly * (1 - taxRate);
   const taxCost = monthly - takeHomeMonthly;
+
+  /* ---------- what actually lands in your account ----------
+     A paycheque is a real amount, so it comes off the real 52-week year
+     rather than the 4-week months the cards above use. For weekly and
+     fortnightly pay those agree exactly; for monthly pay a real cheque
+     covers 4.33 weeks, so it is a little larger than the "month" above. */
+  const period = PAY_PERIODS[payPeriod] || PAY_PERIODS.biweekly;
+  const grossPerCheque = trueYearly / period.perYear;
+  const netPerCheque = grossPerCheque * (1 - taxRate);
 
   const subsTotal = subs.reduce((total, sub) => total + monthlyCost(sub), 0);
   const leftOver = takeHomeMonthly - subsTotal;
@@ -170,6 +190,20 @@ function App() {
           />
         </label>
 
+        <label className="field">
+          <span>How Often Are You Paid?</span>
+          <select
+            value={payPeriod}
+            onChange={(e) => setPayPeriod(e.target.value)}
+          >
+            {Object.entries(PAY_PERIODS).map(([key, p]) => (
+              <option key={key} value={key}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label className="field" style={{ marginBottom: 0 }}>
           <span>Where Do You Live?</span>
           <select
@@ -192,6 +226,38 @@ function App() {
         <p className="figure-label">You Earn</p>
         <p className="figure">{money(monthly)}</p>
         <p className="figure-label">A Month, Before Anything Comes Out</p>
+      </div>
+
+      <div className="card">
+        <p className="figure-label">Each Paycheque</p>
+        <p className="figure">{money(netPerCheque)}</p>
+        <p className="figure-label">
+          {period.name}, After Tax · {period.perYear} Cheques A Year
+        </p>
+
+        {grossPerCheque > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="legend-row">
+              <span style={{ flex: 1 }}>Gross Per Cheque</span>
+              <span className="muted">{money(grossPerCheque)}</span>
+            </div>
+            <div className="legend-row">
+              <span style={{ flex: 1 }}>Taken Off</span>
+              <span className="muted">
+                −{money(grossPerCheque - netPerCheque)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Only worth explaining where the two figures genuinely differ */}
+        {grossPerCheque > 0 && period.perYear < 26 && (
+          <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+            A Real {period.name === "Once A Month" ? "Month" : "Half-Month"} Is
+            Slightly Longer Than The 4-Week Months Used Above, So This Is A
+            Little Larger Than The Monthly Figures On This Page.
+          </p>
+        )}
       </div>
 
       <div className="card">
