@@ -20,8 +20,8 @@ export function monthlyCost(sub) {
 // "$17 a month" / "$6 × 3 a week" — what the row says underneath the name.
 export function describe(sub) {
   const times = Number(sub.times) || 1;
-  const per = sub.every === "week" ? "a week" : "a month";
+  const per = sub.every === "week" ? "A Week" : "A Month";
   return times > 1
-    ? `${times} × ${per}`
+    ? `× ${times} ${per}`
     : per;
 }

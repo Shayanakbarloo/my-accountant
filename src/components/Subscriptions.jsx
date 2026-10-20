@@ -52,7 +52,7 @@ function Subscriptions({ subs, onAdd, onEdit, onRemove }) {
     <div>
       <h3>Subscriptions</h3>
 
-      {subs.length === 0 && <p className="empty">Nothing added yet.</p>}
+      {subs.length === 0 && <p className="empty">Nothing Added Yet.</p>}
 
       {subs.map((sub) => (
         <div className="row" key={sub.id}>
@@ -62,7 +62,7 @@ function Subscriptions({ subs, onAdd, onEdit, onRemove }) {
               {money(sub.cost)} {describe(sub)}
               {/* Only worth restating the monthly figure when it differs */}
               {monthlyCost(sub) !== Number(sub.cost) &&
-                ` · ${money(monthlyCost(sub))} a month`}
+                ` · ${money(monthlyCost(sub))} A Month`}
             </div>
           </div>
           <div className="row-actions">
@@ -78,7 +78,7 @@ function Subscriptions({ subs, onAdd, onEdit, onRemove }) {
 
       {subs.length > 0 && (
         <p className="total-line">
-          <strong>{money(total)}</strong> a month in total
+          <strong>{money(total)}</strong> A Month In Total
         </p>
       )}
 
@@ -97,8 +97,8 @@ function Subscriptions({ subs, onAdd, onEdit, onRemove }) {
           onKeyDown={(e) => e.key === "Enter" && save()}
         />
         <select value={every} onChange={(e) => setEvery(e.target.value)}>
-          <option value="month">a month</option>
-          <option value="week">a week</option>
+          <option value="month">A Month</option>
+          <option value="week">A Week</option>
         </select>
         <input
           type="number"
@@ -118,8 +118,8 @@ function Subscriptions({ subs, onAdd, onEdit, onRemove }) {
       </div>
 
       <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-        The last box is how many times you pay in that period — a $6 coffee
-        three mornings a week is 6, a week, × 3.
+        The Last Box Is How Many Times You Pay In That Period — A $6 Coffee
+        Three Mornings A Week Is 6, A Week, × 3.
       </p>
     </div>
   );

@@ -107,11 +107,11 @@ function App() {
   return (
     <div className="page">
       <h1>My Accountant</h1>
-      <p className="tagline">Know what you keep. Plan what's next.</p>
+      <p className="tagline">Know What You Keep. Plan What's Next.</p>
 
       <div className="card">
         <label className="field">
-          <span>How much do you earn per hour?</span>
+          <span>How Much Do You Earn Per Hour?</span>
           <input
             type="number"
             value={rate}
@@ -121,7 +121,7 @@ function App() {
         </label>
 
         <label className="field">
-          <span>How many hours do you work per week?</span>
+          <span>How Many Hours Do You Work Per Week?</span>
           <input
             type="number"
             value={hours}
@@ -131,7 +131,7 @@ function App() {
         </label>
 
         <label className="field" style={{ marginBottom: 0 }}>
-          <span>Where do you live?</span>
+          <span>Where Do You Live?</span>
           <select
             value={province}
             onChange={(e) => setProvince(e.target.value)}
@@ -149,25 +149,25 @@ function App() {
       </div>
 
       <div className="card">
-        <p className="figure-label">You earn</p>
+        <p className="figure-label">You Earn</p>
         <p className="figure">{money(monthly)}</p>
-        <p className="figure-label">a month, before anything comes out</p>
+        <p className="figure-label">A Month, Before Anything Comes Out</p>
       </div>
 
       <div className="card">
-        <p className="figure-label">After tax</p>
+        <p className="figure-label">After Tax</p>
         <p className="figure">{money(takeHomeMonthly)}</p>
         <p className="figure-label">
-          {(taxRate * 100).toFixed(1)}% of your pay goes to tax and deductions
-          in {deductions.provinceName}
+          {(taxRate * 100).toFixed(1)}% Of Your Pay Goes To Tax And Deductions
+          In {deductions.provinceName}
         </p>
 
         {/* The breakdown, so the percentage above isn't just a mystery number */}
         {monthly > 0 && (
           <div style={{ marginTop: 20 }}>
             {[
-              ["Federal tax", deductions.federal],
-              [`${deductions.provinceName} tax`, deductions.provincial],
+              ["Federal Tax", deductions.federal],
+              [`${deductions.provinceName} Tax`, deductions.provincial],
               [deductions.pensionLabel, deductions.cpp],
               ["EI", deductions.ei],
               ["QPIP", deductions.parental],
@@ -177,7 +177,7 @@ function App() {
                 <div className="legend-row" key={label}>
                   <span style={{ flex: 1 }}>{label}</span>
                   <span className="muted">
-                    {money(amount / 12)} a month
+                    {money(amount / 12)} A Month
                   </span>
                 </div>
               ))}
@@ -226,19 +226,19 @@ function App() {
       </div>
 
       <div className="card">
-        <p className="figure-label">Free to spend</p>
+        <p className="figure-label">Free To Spend</p>
         <p className={`figure ${trulyFree < 0 ? "bad" : ""}`}>
           {money(trulyFree)}
         </p>
         <p className="figure-label">
           {trulyFree < 0
-            ? "You're committed to more than you have."
-            : "a month, after tax, subscriptions, debts and goals"}
+            ? "You're Committed To More Than You Have."
+            : "A Month, After Tax, Subscriptions, Debts And Goals"}
         </p>
       </div>
 
       <p className="muted" style={{ fontSize: 12, textAlign: "center" }}>
-        Estimates only — not tax or financial advice.
+        Estimates Only — Not Tax Or Financial Advice.
         <br />
         Copyright © {new Date().getFullYear()} Shayan Akabrloyshabghai.
       </p>

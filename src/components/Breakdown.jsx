@@ -46,11 +46,11 @@ function Breakdown({ gross, tax, subs, debt, goals, free }) {
 
   // Only include slices with something in them — a 0% slice looks broken
   const data = [
-    { name: "Tax and deductions", value: tax },
+    { name: "Tax And Deductions", value: tax },
     { name: "Subscriptions", value: subs },
-    { name: "Debt payments", value: debt },
-    { name: "Saving goals", value: goals },
-    { name: "Free to spend", value: free },
+    { name: "Debt Payments", value: debt },
+    { name: "Saving Goals", value: goals },
+    { name: "Free To Spend", value: free },
   ].filter((slice) => slice.value > 0);
 
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
@@ -60,15 +60,15 @@ function Breakdown({ gross, tax, subs, debt, goals, free }) {
   if (gross <= 0 || total === 0) {
     return (
       <div>
-        <h3>Where your money goes</h3>
-        <p className="empty">Enter your wage above and this will fill in.</p>
+        <h3>Where Your Money Goes</h3>
+        <p className="empty">Enter Your Wage Above And This Will Fill In.</p>
       </div>
     );
   }
 
   return (
     <div ref={boxRef}>
-      <h3>Where your money goes</h3>
+      <h3>Where Your Money Goes</h3>
 
       <div
         style={{
@@ -104,7 +104,7 @@ function Breakdown({ gross, tax, subs, debt, goals, free }) {
 
             <Tooltip
               formatter={(value, name) => [
-                `${money(value)} a month · ${Math.round(
+                `${money(value)} A Month · ${Math.round(
                   (value / total) * 100
                 )}%`,
                 name,

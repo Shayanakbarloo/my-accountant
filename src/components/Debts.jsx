@@ -47,10 +47,10 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
 
   return (
     <div>
-      <h3>What you owe</h3>
+      <h3>What You Owe</h3>
 
       {debts.length === 0 && (
-        <p className="empty">Nothing owed. Good place to be.</p>
+        <p className="empty">Nothing Owed. Good Place To Be.</p>
       )}
 
       {debts.map((debt) => {
@@ -63,25 +63,25 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
 
               <div className="row-note">
                 {money(debt.balance)}
-                {debt.rate > 0 && ` at ${debt.rate}%`}
-                {debt.date ? ` · due ${debt.date}` : " · no deadline"}
+                {debt.rate > 0 && ` At ${debt.rate}%`}
+                {debt.date ? ` · Due ${debt.date}` : " · No Deadline"}
               </div>
 
               {plan.stuck ? (
                 <div className="row-note bad">
-                  Interest alone is {money(plan.monthlyInterest)} a month — more
-                  than you have spare. Set a deadline or cut costs.
+                  Interest Alone Is {money(plan.monthlyInterest)} A Month — More
+                  Than You Have Spare. Set A Deadline Or Cut Costs.
                 </div>
               ) : (
                 <>
                   <div
                     className={`row-note ${plan.share > 100 ? "bad" : "good"}`}
                   >
-                    {money(plan.payment)} a month — clear by {plan.payoffLabel}
+                    {money(plan.payment)} A Month — Clear By {plan.payoffLabel}
                   </div>
                   {plan.interestPaid > 1 && (
                     <div className="row-note">
-                      {money(plan.interestPaid)} of that is interest
+                      {money(plan.interestPaid)} Of That Is Interest
                     </div>
                   )}
                 </>
@@ -105,13 +105,13 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
 
       {debts.length > 0 && (
         <p className="total-line">
-          <strong>{money(totalOwed)}</strong> owed in total
+          <strong>{money(totalOwed)}</strong> Owed In Total
         </p>
       )}
 
       <div className={editingId !== null ? "add-row editing" : "add-row"}>
         <input
-          placeholder="Credit card"
+          placeholder="Credit Card"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />

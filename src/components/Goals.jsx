@@ -37,10 +37,10 @@ function Goals({ goals, freeMonthly, onAdd, onEdit, onRemove }) {
 
   return (
     <div>
-      <h3>Saving goals</h3>
+      <h3>Saving Goals</h3>
 
       {goals.length === 0 && (
-        <p className="empty">Nothing planned yet.</p>
+        <p className="empty">Nothing Planned Yet.</p>
       )}
 
       {goals.map((goal) => {
@@ -52,17 +52,17 @@ function Goals({ goals, freeMonthly, onAdd, onEdit, onRemove }) {
               <div className="row-title">{goal.title}</div>
 
               <div className="row-note">
-                {money(goal.cost)} by {goal.date}
+                {money(goal.cost)} By {goal.date}
               </div>
 
               {plan.overdue ? (
                 <div className="row-note warn">
-                  That date has passed — pick a new one.
+                  That Date Has Passed — Pick A New One.
                 </div>
               ) : (
                 <div className={`row-note ${plan.share > 100 ? "bad" : "good"}`}>
-                  {money(plan.perMonth)} a month — {Math.round(plan.share)}% of
-                  what's spare
+                  {money(plan.perMonth)} A Month — {Math.round(plan.share)}% Of
+                  What's Spare
                 </div>
               )}
             </div>
@@ -84,7 +84,7 @@ function Goals({ goals, freeMonthly, onAdd, onEdit, onRemove }) {
 
       <div className={editingId !== null ? "add-row editing" : "add-row"}>
         <input
-          placeholder="New laptop"
+          placeholder="New Laptop"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
