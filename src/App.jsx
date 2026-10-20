@@ -33,13 +33,13 @@ function loadSaved() {
 
 const saved = loadSaved();
 
-// How often the money actually lands, and how many times a year that is.
-// These are real counts: 26 fortnights, 24 half-months, 12 months.
+// How often you get paid, as a number of weeks.
+// The app treats a month as 4 weeks, so these stay consistent with
+// every other figure on the page.
 const PAY_PERIODS = {
-  weekly:      { name: "Every Week",        perYear: 52 },
-  biweekly:    { name: "Every Two Weeks",   perYear: 26 },
-  semimonthly: { name: "Twice A Month",     perYear: 24 },
-  monthly:     { name: "Once A Month",      perYear: 12 },
+  weekly:   { name: "Every Week", label: "A Week", weeks: 1 },
+  biweekly: { name: "Every Two Weeks", label: "Every Two Weeks", weeks: 2 },
+  monthly:  { name: "Every Month", label: "A Month", weeks: 4 },
 };
 
 // Older saves stored subscriptions without ids. Give them one on the way in
@@ -82,14 +82,11 @@ function App() {
   const takeHomeMonthly = monthly * (1 - taxRate);
   const taxCost = monthly - takeHomeMonthly;
 
-  /* ---------- what actually lands in your account ----------
-     A paycheque is a real amount, so it comes off the real 52-week year
-     rather than the 4-week months the cards above use. For weekly and
-     fortnightly pay those agree exactly; for monthly pay a real cheque
-     covers 4.33 weeks, so it is a little larger than the "month" above. */
+  // What the top two cards show. Everything below them stays monthly,
+  // because subscriptions, debts and goals are monthly commitments.
   const period = PAY_PERIODS[payPeriod] || PAY_PERIODS.biweekly;
-  const grossPerCheque = trueYearly / period.perYear;
-  const netPerCheque = grossPerCheque * (1 - taxRate);
+  const grossPerPeriod = weekly * period.weeks;
+  const netPerPeriod = grossPerPeriod * (1 - taxRate);
 
   const subsTotal = subs.reduce((total, sub) => total + monthlyCost(sub), 0);
   const leftOver = takeHomeMonthly - subsTotal;
@@ -224,45 +221,15 @@ function App() {
 
       <div className="card">
         <p className="figure-label">You Earn</p>
-        <p className="figure">{money(monthly)}</p>
-        <p className="figure-label">A Month, Before Anything Comes Out</p>
-      </div>
-
-      <div className="card">
-        <p className="figure-label">Each Paycheque</p>
-        <p className="figure">{money(netPerCheque)}</p>
+        <p className="figure">{money(grossPerPeriod)}</p>
         <p className="figure-label">
-          {period.name}, After Tax · {period.perYear} Cheques A Year
+          {period.label}, Before Anything Comes Out
         </p>
-
-        {grossPerCheque > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <div className="legend-row">
-              <span style={{ flex: 1 }}>Gross Per Cheque</span>
-              <span className="muted">{money(grossPerCheque)}</span>
-            </div>
-            <div className="legend-row">
-              <span style={{ flex: 1 }}>Taken Off</span>
-              <span className="muted">
-                −{money(grossPerCheque - netPerCheque)}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Only worth explaining where the two figures genuinely differ */}
-        {grossPerCheque > 0 && period.perYear < 26 && (
-          <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-            A Real {period.name === "Once A Month" ? "Month" : "Half-Month"} Is
-            Slightly Longer Than The 4-Week Months Used Above, So This Is A
-            Little Larger Than The Monthly Figures On This Page.
-          </p>
-        )}
       </div>
 
       <div className="card">
         <p className="figure-label">After Tax</p>
-        <p className="figure">{money(takeHomeMonthly)}</p>
+        <p className="figure">{money(netPerPeriod)}</p>
         <p className="figure-label">
           {(taxRate * 100).toFixed(1)}% Of Your Pay Goes To Tax And Deductions
           In {deductions.provinceName}
@@ -283,7 +250,7 @@ function App() {
                 <div className="legend-row" key={label}>
                   <span style={{ flex: 1 }}>{label}</span>
                   <span className="muted">
-                    {money(amount / 12)} A Month
+                    {money((amount / 52) * period.weeks)} {period.label}
                   </span>
                 </div>
               ))}
