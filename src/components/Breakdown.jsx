@@ -9,16 +9,18 @@ import {
 } from "recharts";
 import { money } from "../lib/format.js";
 
-// This order is deliberate, not decorative. These five colours were checked
-// so that neighbouring slices stay distinguishable to colourblind readers —
-// red beside green, for instance, is nearly identical under deuteranopia,
-// so they're kept apart in the ring.
+// Green is "Free To Spend" — the money you keep — and the rest are arranged
+// around it. The order is deliberate, not decorative: a donut wraps, so the
+// last slice touches the first, and red beside green is nearly identical
+// under deuteranopia. That's why the red sits in the middle of the ring
+// rather than next to the green. Checked with a contrast validator; every
+// adjacent pair is separable both in full colour and with colour blindness.
 const COLOURS = [
-  "#d9534f", // tax
-  "#c8902b", // subscriptions
-  "#b02a5e", // debt
-  "#6a9e3c", // goals
-  "#3a86c8", // free
+  "#3a86c8", // tax           — blue
+  "#d9534f", // subscriptions — red
+  "#c8902b", // debt          — gold
+  "#7d4fc4", // goals         — purple
+  "#6a9e3c", // free to spend — green, the money you keep
 ];
 
 // Mixes a hex colour toward white. Used for the drill-down slices, so
