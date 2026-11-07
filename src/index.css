@@ -267,11 +267,16 @@ button:active {
 /* ---------- running as an installed app on a phone ---------- */
 
 body {
-  /* Stops the whole page rubber-banding when you scroll past the end,
-     which is what makes a web page feel like a web page. */
-  overscroll-behavior-y: none;
   /* Don't let iOS silently enlarge text in landscape */
   -webkit-text-size-adjust: 100%;
+}
+
+/* Only suppress rubber-banding in the installed app — in a browser tab
+   that behaviour is expected, and overriding it feels broken. */
+@media (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: none;
+  }
 }
 
 /* iOS zooms the page when you focus an input under 16px. Keeping inputs
@@ -299,10 +304,12 @@ button,
   }
 }
 
-/* Don't let a long goal name or a wide chart push the page sideways */
-html,
+/* Don't let a long goal name or a wide chart push the page sideways.
+   `clip` rather than `hidden`, and on body only: setting overflow on
+   <html> turns the root into a scroll container and stops the page
+   scrolling normally. */
 body {
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ---------- goal progress ---------- */
@@ -358,4 +365,18 @@ body {
 .save-row button {
   padding: 8px 16px;
   font-size: 14px;
+}
+
+/* The '−' beside Add, for fixing a mistyped amount */
+.save-row .undo {
+  background: none;
+  color: var(--sub);
+  border: 1px solid var(--hair);
+  padding: 7px 14px;
+}
+
+.save-row .undo:hover {
+  color: var(--red);
+  border-color: var(--red);
+  opacity: 1;
 }

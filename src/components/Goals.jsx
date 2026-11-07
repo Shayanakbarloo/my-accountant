@@ -26,11 +26,13 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
   // What's typed into each goal's "add to savings" box, keyed by goal id
   const [deposit, setDeposit] = useState({});
 
-  function recordDeposit(goal) {
+  // sign is +1 to add, -1 to take back a mistyped amount
+  function recordDeposit(goal, sign = 1) {
     const amount = Number(deposit[goal.id]);
     if (!amount || amount <= 0) return;
-    // Adds to what's already there, capped at the goal's price
-    const next = Math.min(goal.cost, (Number(goal.saved) || 0) + amount);
+    const current = Number(goal.saved) || 0;
+    // Stays between nothing and the goal's full price
+    const next = Math.max(0, Math.min(goal.cost, current + sign * amount));
     onEdit(goal.id, { saved: next });
     setDeposit({ ...deposit, [goal.id]: "" });
   }
@@ -176,7 +178,16 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                   }
                   onKeyDown={(e) => e.key === "Enter" && recordDeposit(goal)}
                 />
-                <button onClick={() => recordDeposit(goal)}>Add</button>
+                <button onClick={() => recordDeposit(goal, 1)}>Add</button>
+                {goal.saved > 0 && (
+                  <button
+                    className="undo"
+                    title="Take this amount back off"
+                    onClick={() => recordDeposit(goal, -1)}
+                  >
+                    −
+                  </button>
+                )}
                 <span className="muted" style={{ fontSize: 13 }}>
                   {money(goal.remaining)} To Go
                 </span>

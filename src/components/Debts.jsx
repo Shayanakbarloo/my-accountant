@@ -12,11 +12,13 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
   // What's typed into each debt's "record a payment" box, keyed by id
   const [payment, setPayment] = useState({});
 
-  function recordPayment(debt) {
+  // sign is +1 to record a payment, -1 to take back a mistyped one
+  function recordPayment(debt, sign = 1) {
     const amount = Number(payment[debt.id]);
     if (!amount || amount <= 0) return;
-    // Adds to what's already paid, capped at the original balance
-    const next = Math.min(debt.balance, (Number(debt.paid) || 0) + amount);
+    const current = Number(debt.paid) || 0;
+    // Stays between nothing and the original balance
+    const next = Math.max(0, Math.min(debt.balance, current + sign * amount));
     onEdit(debt.id, { paid: next });
     setPayment({ ...payment, [debt.id]: "" });
   }
@@ -126,7 +128,16 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
                     }
                     onKeyDown={(e) => e.key === "Enter" && recordPayment(debt)}
                   />
-                  <button onClick={() => recordPayment(debt)}>Add</button>
+                  <button onClick={() => recordPayment(debt, 1)}>Add</button>
+                  {plan.paid > 0 && (
+                    <button
+                      className="undo"
+                      title="Take this amount back off"
+                      onClick={() => recordPayment(debt, -1)}
+                    >
+                      −
+                    </button>
+                  )}
                   <span className="muted" style={{ fontSize: 13 }}>
                     {money(plan.balance)} To Go
                   </span>
