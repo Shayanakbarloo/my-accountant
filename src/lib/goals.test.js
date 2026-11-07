@@ -109,6 +109,27 @@ check("a month is 4 weeks, so halving it gives the true 14-day figure",
 check("a quarter of it gives the true 7-day figure",
   Math.abs(perMonth / 4 - 8000 / (days / 7)) < 0.01);
 
+// ---- whole deposits, not a fractional rate ----
+// $2,350 by 21 Jan 2027 from 7 Nov 2026 is 75 days — 5.36 fortnights.
+// Dividing by 5.36 gives $438.67, which only reaches the target if a
+// deposit lands today. Dividing by 5 whole deposits always gets there.
+{
+  const { perDeposit } = await import("./goals.js");
+  const r = perDeposit(2350, 75, 14);
+  console.log(`\n$2,350 over 75 days, biweekly: ${r.deposits} x $${r.amount.toFixed(2)}`);
+  check("rounds down to whole deposits", r.deposits === 5);
+  check("the deposits add up to the goal", Math.abs(r.deposits * r.amount - 2350) < 0.01);
+  check("never fewer than one deposit", perDeposit(500, 3, 14).deposits === 1);
+
+  // The safety property: saving this much always reaches the target,
+  // whether the first deposit is today or a full period from now.
+  for (const start of [0, 14]) {
+    let have = 0;
+    for (let d = start; d <= 75; d += 14) have += r.amount;
+    check(`reaches the target with the first deposit on day ${start}`, have >= 2350 - 0.01);
+  }
+}
+
 check("listNames reads naturally", listNames([{name:"A"},{name:"B"},{name:"C"}]) === "A, B And C");
 
 console.log(failed === 0 ? "\nAll checks passed." : `\n${failed} failed.`);

@@ -51,7 +51,8 @@ export function allocateGoals(goals, available) {
 
   return ordered.map((goal) => {
     const cost = Number(goal.cost) || 0;
-    const months = monthsUntil(goal.date);
+    const daysLeft = Math.ceil((new Date(goal.date) - new Date()) / MS_PER_DAY);
+    const months = daysLeft / DAYS_PER_MONTH;
     const overdue = months <= 0;
 
     // What it needs each month to land on the date asked for
@@ -75,6 +76,7 @@ export function allocateGoals(goals, available) {
     return {
       ...goal,
       overdue,
+      daysLeft,
       needed,
       gets,
       shortfall,
@@ -133,4 +135,17 @@ export function listNames(items) {
   if (names.length === 1) return names[0];
   if (names.length === 2) return names[0] + " And " + names[1];
   return names.slice(0, -1).join(", ") + " And " + names[names.length - 1];
+}
+/**
+ * How much to put aside on each actual payday.
+ *
+ * The subtlety: money arrives in lumps, not as a smooth rate. With 75 days
+ * until a deadline there are 5.36 fortnights — but you cannot save on a
+ * fraction of a payday. Dividing by 5.36 gives a figure that only works if
+ * a deposit happens today; miss that and you arrive short. Rounding the
+ * number of deposits DOWN is the only version that can't fail.
+ */
+export function perDeposit(cost, daysLeft, periodDays) {
+  const deposits = Math.max(1, Math.floor(daysLeft / periodDays));
+  return { deposits, amount: cost / deposits };
 }

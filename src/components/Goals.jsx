@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { money } from "../lib/format.js";
-import { allocateGoals, suggestCuts, listNames } from "../lib/goals.js";
+import {
+  allocateGoals,
+  suggestCuts,
+  listNames,
+  perDeposit,
+} from "../lib/goals.js";
 
 // How to show the "save this much" figure. A month is four weeks here,
 // same as everywhere else in the app.
 const VIEWS = {
-  week:     { label: "A Week", perMonth: 1 / 4 },
-  biweekly: { label: "Biweekly", perMonth: 2 / 4 },
-  month:    { label: "A Month", perMonth: 1 },
+  week:     { label: "A Week", perMonth: 1 / 4, days: 7, each: "Week" },
+  biweekly: { label: "Biweekly", perMonth: 2 / 4, days: 14, each: "Two Weeks" },
+  month:    { label: "A Month", perMonth: 1, days: 28, each: "Month" },
 };
 
 function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
@@ -108,9 +113,17 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                 {money(inView(goal.needed))} {v.label}.
               </div>
             ) : goal.onTrack ? (
-              <div className="row-note good">
-                Save {money(inView(goal.gets))} {v.label} — On Track
-              </div>
+              (() => {
+                // Money arrives in lumps, so divide by whole deposits
+                // rather than a fraction of one — see perDeposit().
+                const d = perDeposit(goal.cost, goal.daysLeft, v.days);
+                return (
+                  <div className="row-note good">
+                    Save {money(d.amount)} Every {v.each} — {d.deposits}{" "}
+                    {d.deposits === 1 ? "Payment" : "Payments"} To Go
+                  </div>
+                );
+              })()
             ) : (
               <>
                 <div className="row-note warn">
