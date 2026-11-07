@@ -1,0 +1,129 @@
+import { monthlyCost } from "./subscriptions.js";
+
+/*  Working out what each goal really gets.
+
+    Goals all want money from the same pot. Marking one as a priority means
+    it gets filled first and the others live on what's left — which usually
+    means they take longer, so this works out their honest finish date
+    rather than pretending nothing changed.                               */
+
+const MS_PER_DAY = 86400000;
+const DAYS_PER_MONTH = 30.44;
+
+function monthsUntil(dateString) {
+  const days = Math.ceil((new Date(dateString) - new Date()) / MS_PER_DAY);
+  return days / DAYS_PER_MONTH;
+}
+
+function dateAfterMonths(months) {
+  const d = new Date();
+  d.setMonth(d.getMonth() + Math.ceil(months));
+  return d;
+}
+
+function monthYear(date) {
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+/**
+ * Shares out `available` each month across the goals.
+ * Priority goals are filled to what they need before anyone else gets a cent.
+ *
+ * Returns one row per goal, in the order they should be shown:
+ * priorities first, then the rest.
+ */
+export function allocateGoals(goals, available) {
+  const pot = Math.max(0, available);
+
+  const ordered = [
+    ...goals.filter((g) => g.priority),
+    ...goals.filter((g) => !g.priority),
+  ];
+
+  let left = pot;
+
+  return ordered.map((goal) => {
+    const cost = Number(goal.cost) || 0;
+    const months = monthsUntil(goal.date);
+    const overdue = months <= 0;
+
+    // What it needs each month to land on the date asked for
+    const needed = overdue ? 0 : cost / Math.max(months, 0.1);
+
+    // What it actually gets, after anything above it has taken its share
+    const gets = Math.min(needed, left);
+    left = Math.max(0, left - gets);
+
+    const shortfall = Math.max(0, needed - gets);
+    const onTrack = !overdue && shortfall < 0.5;
+
+    // At the rate it's actually getting, when would it finish?
+    let realDate = null;
+    let realMonths = null;
+    if (!overdue && gets > 0) {
+      realMonths = cost / gets;
+      realDate = monthYear(dateAfterMonths(realMonths));
+    }
+
+    return {
+      ...goal,
+      overdue,
+      needed,
+      gets,
+      shortfall,
+      onTrack,
+      stalled: !overdue && gets <= 0,
+      realDate,
+      // How much later than asked, in months — only meaningful when behind
+      monthsLate: realMonths && months > 0 ? Math.max(0, realMonths - months) : 0,
+      share: pot > 0 ? (gets / pot) * 100 : 0,
+    };
+  });
+}
+
+/**
+ * Which subscriptions would you have to drop to cover a shortfall?
+ *
+ * Prefers the smallest single subscription that covers it — no point
+ * suggesting someone cancel a $72 coffee habit when dropping $17 of
+ * streaming would do. Falls back to combining the largest ones.
+ */
+export function suggestCuts(shortfallMonthly, subs) {
+  if (shortfallMonthly <= 0 || !subs || subs.length === 0) return null;
+
+  const priced = subs
+    .map((s) => ({ name: s.name, cost: monthlyCost(s) }))
+    .filter((s) => s.cost > 0);
+
+  if (priced.length === 0) return null;
+
+  // Cheapest single subscription that covers the whole gap
+  const single = priced
+    .filter((s) => s.cost >= shortfallMonthly)
+    .sort((a, b) => a.cost - b.cost)[0];
+
+  if (single) {
+    return { cuts: [single], freed: single.cost, enough: true };
+  }
+
+  // Otherwise take the biggest ones until the gap is covered
+  const sorted = [...priced].sort((a, b) => b.cost - a.cost);
+  const cuts = [];
+  let freed = 0;
+
+  for (const sub of sorted) {
+    cuts.push(sub);
+    freed += sub.cost;
+    if (freed >= shortfallMonthly) break;
+  }
+
+  return { cuts, freed, enough: freed >= shortfallMonthly };
+}
+
+/** "Netflix" · "Netflix and Spotify" · "Netflix, Spotify and Gym" */
+export function listNames(items) {
+  const names = items.map((i) => i.name);
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return names[0] + " And " + names[1];
+  return names.slice(0, -1).join(", ") + " And " + names[names.length - 1];
+}

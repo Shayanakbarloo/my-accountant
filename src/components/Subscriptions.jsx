@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { money } from "../lib/format.js";
-import { monthlyCost, describe } from "../lib/Subscriptions.js";
+import { monthlyCost, describe } from "../lib/subscriptions.js";
 
 // subs, onAdd, onEdit and onRemove are props — passed down from App.jsx
 function Subscriptions({ subs, onAdd, onEdit, onRemove }) {

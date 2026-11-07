@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { money } from "./lib/format.js";
 import { yearlyDeductions, PROVINCES } from "./lib/tax.js";
-import { monthlyCost } from "./lib/Subscriptions.js";
-import { planForDebt, planForGoal } from "./lib/Debt.js";
+import { monthlyCost } from "./lib/subscriptions.js";
+import { planForDebt } from "./lib/Debt.js";
+import { allocateGoals } from "./lib/goals.js";
 import Subscriptions from "./components/Subscriptions.jsx";
 import Debts from "./components/Debts.jsx";
 import Goals from "./components/Goals.jsx";
@@ -100,10 +101,10 @@ function App() {
   // Goals compete with debts for the same money, so they only get what's left.
   const freeForGoals = leftOver - debtCost;
 
-  const goalCost = goals.reduce(
-    (total, goal) => total + planForGoal(goal, freeForGoals).perMonth,
-    0
-  );
+  // Priority goals are filled first, so the total actually set aside is
+  // whatever the allocator hands out — never more than there is.
+  const goalRows = allocateGoals(goals, freeForGoals);
+  const goalCost = goalRows.reduce((total, row) => total + row.gets, 0);
 
   const trulyFree = freeForGoals - goalCost;
 
@@ -138,9 +139,9 @@ function App() {
     {
       name: "Saving Goals",
       value: goalCost,
-      parts: goals.map((goal) => ({
-        name: goal.title,
-        value: planForGoal(goal, freeForGoals).perMonth,
+      parts: goalRows.map((row) => ({
+        name: row.priority ? "★ " + row.title : row.title,
+        value: row.gets,
       })),
     },
     // Nothing to break this one into — it's whatever is left.
@@ -285,6 +286,7 @@ function App() {
         <Goals
           goals={goals}
           freeMonthly={freeForGoals}
+          subs={subs}
           onAdd={add(setGoals, goals)}
           onEdit={edit(setGoals, goals)}
           onRemove={remove(setGoals, goals)}
@@ -293,8 +295,9 @@ function App() {
 
       <div className="card">
         <p className="figure-label">Free To Spend</p>
-        <p className={`figure ${trulyFree < 0 ? "bad" : ""}`}>
-          {money(trulyFree)}
+        <p className={`figure ${trulyFree < 0 ? "bad" : "good"}`}>
+          {trulyFree >= 0 ? "+" : "−"}
+          {money(Math.abs(trulyFree))}
         </p>
         <p className="figure-label">
           {trulyFree < 0
