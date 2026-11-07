@@ -316,11 +316,11 @@ body {
 
 .bar {
   position: relative;
-  height: 22px;
-  background: var(--gray);
+  height: 10px;
+  background: var(--hair);
   border-radius: 999px;
   overflow: hidden;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .bar-fill {
@@ -335,18 +335,20 @@ body {
   background: var(--green);
 }
 
+/*  The figure under the bar.
+
+    It used to sit inside the bar using mix-blend-mode: difference, so it
+    would read against both the filled and unfilled halves. It did read —
+    but white differenced against the green fill comes out magenta, which
+    looks like a rendering fault. Underneath it's legible at every
+    percentage, and it lets the bar itself slim down.                     */
+
 .bar-text {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  margin-top: 6px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 590;
   font-variant-numeric: tabular-nums;
-  /* Sits above the fill, readable on both halves */
-  mix-blend-mode: difference;
-  color: #fff;
+  color: var(--sub);
 }
 
 .save-row {
@@ -368,15 +370,63 @@ body {
 }
 
 /* The '−' beside Add, for fixing a mistyped amount */
-.save-row .undo {
-  background: none;
-  color: var(--sub);
-  border: 1px solid var(--hair);
-  padding: 7px 14px;
+/*  Everything you've put in, one pill each.
+
+    These replace the old "−" button, which took an amount back off the
+    total but couldn't tell you what you'd put in to begin with.          */
+
+.entries {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.save-row .undo:hover {
-  color: var(--red);
-  border-color: var(--red);
+.entries li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--gray);
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 4px 4px 4px 11px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.entry-amount {
+  font-weight: 590;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-when {
+  color: var(--sub);
+}
+
+/* The × itself. Round, quiet until you go near it. */
+.entry-x {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--sub);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The glyph sits slightly high in most faces */
+  padding-bottom: 2px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.entry-x:hover {
+  background: var(--red);
+  color: #fff;
   opacity: 1;
 }

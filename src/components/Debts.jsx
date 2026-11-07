@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { money } from "../lib/format.js";
 import { planForDebt } from "../lib/Debt.js";
+import {
+  entryList,
+  addEntry,
+  removeEntry,
+  sumEntries,
+} from "../lib/entries.js";
+import Entries from "./Entries.jsx";
 
 function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
   const [name, setName] = useState("");
@@ -12,15 +19,31 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
   // What's typed into each debt's "record a payment" box, keyed by id
   const [payment, setPayment] = useState({});
 
-  // sign is +1 to record a payment, -1 to take back a mistyped one
-  function recordPayment(debt, sign = 1) {
+  /*  Payments are kept as a list of separate entries rather than one running
+      total, so a mistyped one can be deleted on its own instead of having to
+      be subtracted back out.                                               */
+  function paymentsFor(debt) {
+    return entryList(debt.payments, debt.paid);
+  }
+
+  function addPayment(debt) {
     const amount = Number(payment[debt.id]);
     if (!amount || amount <= 0) return;
-    const current = Number(debt.paid) || 0;
-    // Stays between nothing and the original balance
-    const next = Math.max(0, Math.min(debt.balance, current + sign * amount));
-    onEdit(debt.id, { paid: next });
+
+    onEdit(debt.id, {
+      payments: addEntry(paymentsFor(debt), amount),
+      // Anything an older save kept as a single number has been folded into
+      // the list above; clearing it stops the two disagreeing.
+      paid: 0,
+    });
     setPayment({ ...payment, [debt.id]: "" });
+  }
+
+  function dropPayment(debt, entryId) {
+    onEdit(debt.id, {
+      payments: removeEntry(paymentsFor(debt), entryId),
+      paid: 0,
+    });
   }
 
   function startEdit(debt) {
@@ -72,6 +95,10 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
 
       {debts.map((debt) => {
         const plan = planForDebt(debt, freeMonthly);
+        const entries = paymentsFor(debt);
+        // What the entries actually add up to, before any clamping — so an
+        // overpayment can be pointed out rather than silently swallowed.
+        const entered = sumEntries(entries);
 
         return (
           <div className="row" key={debt.id}>
@@ -111,38 +138,43 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
                   className="bar-fill"
                   style={{ width: Math.min(100, plan.progress) + "%" }}
                 />
-                <span className="bar-text">
-                  {money(plan.paid)} Paid Of {money(plan.original)} ·{" "}
-                  {Math.round(plan.progress)}%
+              </div>
+              <div className="bar-text">
+                {money(plan.paid)} Paid Of {money(plan.original)} ·{" "}
+                {Math.round(plan.progress)}%
+              </div>
+
+              {entered > plan.original + 0.5 && (
+                <div className="row-note">
+                  That's {money(entered - plan.original)} More Than You Owed.
+                </div>
+              )}
+
+              <div className="save-row">
+                <input
+                  type="number"
+                  placeholder="Paid"
+                  value={payment[debt.id] || ""}
+                  onChange={(e) =>
+                    setPayment({ ...payment, [debt.id]: e.target.value })
+                  }
+                  onKeyDown={(e) => e.key === "Enter" && addPayment(debt)}
+                />
+                <button onClick={() => addPayment(debt)}>Add</button>
+                <span className="muted" style={{ fontSize: 13 }}>
+                  {plan.cleared
+                    ? "Paid Off"
+                    : `${money(plan.balance)} To Go`}
                 </span>
               </div>
 
-              {!plan.cleared && (
-                <div className="save-row">
-                  <input
-                    type="number"
-                    placeholder="Paid"
-                    value={payment[debt.id] || ""}
-                    onChange={(e) =>
-                      setPayment({ ...payment, [debt.id]: e.target.value })
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && recordPayment(debt)}
-                  />
-                  <button onClick={() => recordPayment(debt, 1)}>Add</button>
-                  {plan.paid > 0 && (
-                    <button
-                      className="undo"
-                      title="Take this amount back off"
-                      onClick={() => recordPayment(debt, -1)}
-                    >
-                      −
-                    </button>
-                  )}
-                  <span className="muted" style={{ fontSize: 13 }}>
-                    {money(plan.balance)} To Go
-                  </span>
-                </div>
-              )}
+              {/*  Every payment you've recorded, each with an × — so a wrong
+                   one is removed by deleting it, not by subtracting it.    */}
+              <Entries
+                entries={entries}
+                label="Payment"
+                onRemove={(entryId) => dropPayment(debt, entryId)}
+              />
             </div>
 
             <div className="row-actions">

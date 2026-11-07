@@ -7,6 +7,21 @@ import { monthlyCost } from "./subscriptions.js";
     means they take longer, so this works out their honest finish date
     rather than pretending nothing changed.                               */
 
+
+/**
+ * What's been put aside so far.
+ *
+ * Deposits are kept as a list rather than a running total, so any single
+ * one can be taken back out if it was typed wrong. Goals saved before
+ * that change stored a plain number, so fall back to it.
+ */
+export function totalSaved(goal) {
+  if (Array.isArray(goal.deposits)) {
+    return goal.deposits.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  }
+  return Number(goal.saved) || 0;
+}
+
 const MS_PER_DAY = 86400000;
 
 // The whole app treats a month as four weeks — monthly income is weekly × 4 —
@@ -51,7 +66,7 @@ export function allocateGoals(goals, available) {
 
   return ordered.map((goal) => {
     const cost = Number(goal.cost) || 0;
-    const saved = Math.min(cost, Math.max(0, Number(goal.saved) || 0));
+    const saved = Math.min(cost, Math.max(0, totalSaved(goal)));
     const remaining = cost - saved;
     const done = remaining <= 0;
 

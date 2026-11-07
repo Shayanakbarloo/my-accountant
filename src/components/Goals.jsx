@@ -6,6 +6,13 @@ import {
   listNames,
   perDeposit,
 } from "../lib/goals.js";
+import {
+  entryList,
+  addEntry,
+  removeEntry,
+  sumEntries,
+} from "../lib/entries.js";
+import Entries from "./Entries.jsx";
 
 // How to show the "save this much" figure. A month is four weeks here,
 // same as everywhere else in the app.
@@ -26,15 +33,35 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
   // What's typed into each goal's "add to savings" box, keyed by goal id
   const [deposit, setDeposit] = useState({});
 
-  // sign is +1 to add, -1 to take back a mistyped amount
-  function recordDeposit(goal, sign = 1) {
+  /*  Deposits are kept as a list of separate entries rather than one running
+      total, so a mistyped one can be deleted on its own.
+
+      Read off the RAW goal, not the row below: allocateGoals clamps `saved`
+      to the goal's price, and reading that would quietly lose an
+      overpayment.                                                          */
+  function depositsFor(id) {
+    const raw = goals.find((g) => g.id === id) || {};
+    return entryList(raw.deposits, raw.saved);
+  }
+
+  function addDeposit(goal) {
     const amount = Number(deposit[goal.id]);
     if (!amount || amount <= 0) return;
-    const current = Number(goal.saved) || 0;
-    // Stays between nothing and the goal's full price
-    const next = Math.max(0, Math.min(goal.cost, current + sign * amount));
-    onEdit(goal.id, { saved: next });
+
+    onEdit(goal.id, {
+      deposits: addEntry(depositsFor(goal.id), amount),
+      // Anything an older save kept as a single number has been folded into
+      // the list above; clearing it stops the two disagreeing.
+      saved: 0,
+    });
     setDeposit({ ...deposit, [goal.id]: "" });
+  }
+
+  function dropDeposit(goal, entryId) {
+    onEdit(goal.id, {
+      deposits: removeEntry(depositsFor(goal.id), entryId),
+      saved: 0,
+    });
   }
 
   const v = VIEWS[view];
@@ -100,74 +127,89 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
 
       {goals.length === 0 && <p className="empty">Nothing Planned Yet.</p>}
 
-      {rows.map((goal) => (
-        <div className="row" key={goal.id}>
-          <div className="row-main">
-            <div className="row-title">
-              {goal.priority && (
-                <span title="Priority — funded first" style={{ marginRight: 6 }}>
-                  ★
-                </span>
-              )}
-              {goal.title}
-            </div>
+      {rows.map((goal) => {
+        const entries = depositsFor(goal.id);
+        // What the entries actually add up to, before any clamping — so an
+        // overpayment can be pointed out rather than silently swallowed.
+        const entered = sumEntries(entries);
 
-            <div className="row-note">
-              {money(goal.cost)} By {goal.date}
-              {goal.priority && " · Priority"}
-            </div>
+        return (
+          <div className="row" key={goal.id}>
+            <div className="row-main">
+              <div className="row-title">
+                {goal.priority && (
+                  <span
+                    title="Priority — funded first"
+                    style={{ marginRight: 6 }}
+                  >
+                    ★
+                  </span>
+                )}
+                {goal.title}
+              </div>
 
-            {goal.overdue ? (
-              <div className="row-note warn">
-                That Date Has Passed — Pick A New One.
+              <div className="row-note">
+                {money(goal.cost)} By {goal.date}
+                {goal.priority && " · Priority"}
               </div>
-            ) : goal.stalled ? (
-              <div className="row-note bad">
-                Nothing Left To Put Toward This. It Needs{" "}
-                {money(inView(goal.needed))} {v.label}.
-              </div>
-            ) : goal.done ? (
-              <div className="row-note good">
-                ★ Fully Saved — You Can Buy It.
-              </div>
-            ) : goal.onTrack ? (
-              (() => {
-                // Based on what's LEFT, so each deposit you record makes
-                // the next one smaller. Whole deposits, not a fraction of
-                // one — see perDeposit().
-                const d = perDeposit(goal.remaining, goal.daysLeft, v.days);
-                return (
-                  <div className="row-note good">
-                    Save {money(d.amount)} Every {v.each} — {d.deposits}{" "}
-                    {d.deposits === 1 ? "Payment" : "Payments"} × {money(d.amount)}{" "}
-                    = {money(goal.remaining)}
-                  </div>
-                );
-              })()
-            ) : (
-              <>
+
+              {goal.overdue ? (
                 <div className="row-note warn">
-                  Getting {money(inView(goal.gets))} {v.label}, Needs{" "}
-                  {money(inView(goal.needed))}
+                  That Date Has Passed — Pick A New One.
                 </div>
-                <div className="row-note">
-                  At This Rate You'd Have It By {goal.realDate}
+              ) : goal.stalled ? (
+                <div className="row-note bad">
+                  Nothing Left To Put Toward This. It Needs{" "}
+                  {money(inView(goal.needed))} {v.label}.
                 </div>
-              </>
-            )}
+              ) : goal.done ? (
+                <div className="row-note good">
+                  ★ Fully Saved — You Can Buy It.
+                </div>
+              ) : goal.onTrack ? (
+                (() => {
+                  // Based on what's LEFT, so each deposit you record makes
+                  // the next one smaller. Whole deposits, not a fraction of
+                  // one — see perDeposit().
+                  const d = perDeposit(goal.remaining, goal.daysLeft, v.days);
+                  return (
+                    <div className="row-note good">
+                      Save {money(d.amount)} Every {v.each} — {d.deposits}{" "}
+                      {d.deposits === 1 ? "Payment" : "Payments"} ×{" "}
+                      {money(d.amount)} = {money(goal.remaining)}
+                    </div>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="row-note warn">
+                    Getting {money(inView(goal.gets))} {v.label}, Needs{" "}
+                    {money(inView(goal.needed))}
+                  </div>
+                  <div className="row-note">
+                    At This Rate You'd Have It By {goal.realDate}
+                  </div>
+                </>
+              )}
 
-            <div className="bar">
-              <div
-                className={`bar-fill${goal.done ? " done" : ""}`}
-                style={{ width: Math.min(100, goal.progress) + "%" }}
-              />
-              <span className="bar-text">
+              <div className="bar">
+                <div
+                  className={`bar-fill${goal.done ? " done" : ""}`}
+                  style={{ width: Math.min(100, goal.progress) + "%" }}
+                />
+              </div>
+              <div className="bar-text">
                 {money(goal.saved)} Of {money(goal.cost)} ·{" "}
                 {Math.round(goal.progress)}%
-              </span>
-            </div>
+              </div>
 
-            {!goal.done && (
+              {entered > goal.cost + 0.5 && (
+                <div className="row-note">
+                  That's {money(entered - goal.cost)} More Than This Goal
+                  Needs.
+                </div>
+              )}
+
               <div className="save-row">
                 <input
                   type="number"
@@ -176,45 +218,46 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                   onChange={(e) =>
                     setDeposit({ ...deposit, [goal.id]: e.target.value })
                   }
-                  onKeyDown={(e) => e.key === "Enter" && recordDeposit(goal)}
+                  onKeyDown={(e) => e.key === "Enter" && addDeposit(goal)}
                 />
-                <button onClick={() => recordDeposit(goal, 1)}>Add</button>
-                {goal.saved > 0 && (
-                  <button
-                    className="undo"
-                    title="Take this amount back off"
-                    onClick={() => recordDeposit(goal, -1)}
-                  >
-                    −
-                  </button>
-                )}
+                <button onClick={() => addDeposit(goal)}>Add</button>
                 <span className="muted" style={{ fontSize: 13 }}>
-                  {money(goal.remaining)} To Go
+                  {goal.done ? "Fully Saved" : `${money(goal.remaining)} To Go`}
                 </span>
               </div>
-            )}
-          </div>
 
-          <div className="row-actions">
-            <button
-              className="link-btn"
-              title={goal.priority ? "Remove priority" : "Make this a priority"}
-              onClick={() => onEdit(goal.id, { priority: !goal.priority })}
-            >
-              {goal.priority ? "Unpin" : "Prioritise"}
-            </button>
-            <button className="link-btn" onClick={() => startEdit(goal)}>
-              Edit
-            </button>
-            <button
-              className="link-btn quiet"
-              onClick={() => onRemove(goal.id)}
-            >
-              Remove
-            </button>
+              {/*  Every deposit you've recorded, each with an × — so a wrong
+                   one is removed by deleting it, not by subtracting it.    */}
+              <Entries
+                entries={entries}
+                label="Deposit"
+                onRemove={(entryId) => dropDeposit(goal, entryId)}
+              />
+            </div>
+
+            <div className="row-actions">
+              <button
+                className="link-btn"
+                title={
+                  goal.priority ? "Remove priority" : "Make this a priority"
+                }
+                onClick={() => onEdit(goal.id, { priority: !goal.priority })}
+              >
+                {goal.priority ? "Unpin" : "Prioritise"}
+              </button>
+              <button className="link-btn" onClick={() => startEdit(goal)}>
+                Edit
+              </button>
+              <button
+                className="link-btn quiet"
+                onClick={() => onRemove(goal.id)}
+              >
+                Remove
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* What to drop, when something can't be funded */}
       {starved && advice && (
@@ -258,8 +301,10 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
             lineHeight: 1.6,
           }}
         >
-          <strong>{starved.title} Is Short {money(inView(starved.shortfall))}{" "}
-          {v.label}</strong>
+          <strong>
+            {starved.title} Is Short {money(inView(starved.shortfall))}{" "}
+            {v.label}
+          </strong>
           <div style={{ marginTop: 6 }}>
             There Are No Subscriptions To Cut, So The Options Are A Later Date,
             Fewer Goals, Or More Hours.

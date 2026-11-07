@@ -1,12 +1,26 @@
 // Works out what one debt demands each month.
 // Lives here rather than in the component so App can use it too.
 
+/**
+ * What's been paid off so far.
+ *
+ * Payments are kept as a list rather than a running total, so any single
+ * one can be taken back out if it was typed wrong. Debts saved before
+ * that change stored a plain number, so fall back to it.
+ */
+export function totalPaid(debt) {
+  if (Array.isArray(debt.payments)) {
+    return debt.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  }
+  return Number(debt.paid) || 0;
+}
+
 export function planForDebt(debt, freeMonthly) {
   const original = Number(debt.balance) || 0;
 
   // What you've already paid off. Interest is charged on what's LEFT,
   // so every payment you record makes the next one cheaper.
-  const paid = Math.min(original, Math.max(0, Number(debt.paid) || 0));
+  const paid = Math.min(original, Math.max(0, totalPaid(debt)));
   const balance = original - paid;
 
   const monthlyRate = (Number(debt.rate) || 0) / 100 / 12;
@@ -72,7 +86,10 @@ export function planForDebt(debt, freeMonthly) {
       ? balance / months
       : (balance * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
 
-  const totalPaid = payment * months;
+  // What the whole term costs at that payment. Named for the term, not
+  // "totalPaid" — that's the helper up top, and a local of the same name
+  // would shadow it everywhere in this function.
+  const paidOverTerm = payment * months;
 
   const payoff = new Date();
   payoff.setDate(payoff.getDate() + Math.ceil(months * 30.44));
@@ -87,7 +104,7 @@ export function planForDebt(debt, freeMonthly) {
     payment,
     months,
     monthlyInterest,
-    interestPaid: totalPaid - balance,
+    interestPaid: paidOverTerm - balance,
     payoffLabel: payoff.toLocaleDateString("en-US", {
       month: "long",
       year: "numeric",

@@ -1,7 +1,9 @@
 import { yearlyDeductions, PROVINCES } from "./src/lib/tax.js";
 import { monthlyCost, describe } from "./src/lib/subscriptions.js";
 import { planForDebt } from "./src/lib/Debt.js";
-import { allocateGoals, perDeposit } from "./src/lib/goals.js";
+import { allocateGoals, perDeposit, totalSaved } from "./src/lib/goals.js";
+import { totalPaid } from "./src/lib/Debt.js";
+import { entryList, addEntry, removeEntry, sumEntries } from "./src/lib/entries.js";
 
 let bad = 0;
 const eq = (label, got, want, tol = 0.01) => {
@@ -112,6 +114,63 @@ console.log(`  -goals     $${goalCost.toFixed(2)}`);
 console.log(`  = free     $${trulyFree.toFixed(2)}`);
 eq("chart slices sum to gross", taxCost+subsTotal+debtCost+goalCost+trulyFree, 4000);
 eq("allocation never exceeds the pot", goalCost <= freeForGoals + 0.01 ? 1 : 0, 1);
+
+console.log("\n" + "=".repeat(62));
+console.log("7. RECORDED ENTRIES  (adding and removing deposits/payments)");
+console.log("=".repeat(62));
+
+// Each deposit is its own entry, so a mistyped one can be deleted rather
+// than subtracted. These checks are what stops that quietly breaking.
+let goalEntries = [];
+goalEntries = addEntry(goalEntries, 470);
+goalEntries = addEntry(goalEntries, 470);
+goalEntries = addEntry(goalEntries, 235);          // the typo
+eq("three deposits add up", sumEntries(goalEntries), 1175);
+
+const typo = goalEntries.find((e) => e.amount === 235);
+goalEntries = removeEntry(goalEntries, typo.id);
+eq("removing only the $235 leaves", sumEntries(goalEntries), 940);
+eq("  and leaves two entries", goalEntries.length, 2);
+
+// Two entries of the same amount must not take each other out
+goalEntries = removeEntry(goalEntries, goalEntries[0].id);
+eq("removing one of two $470s leaves", sumEntries(goalEntries), 470);
+
+eq("ids are unique in a burst",
+   new Set(Array.from({length: 300}).reduce((l) => addEntry(l, 10), []).map((e) => e.id)).size,
+   300);
+
+// Saves made before entries existed kept a single number
+eq("an older save still reads", totalSaved({ saved: 700 }), 700);
+eq("  shown as one removable entry", entryList(undefined, 700).length, 1);
+eq("  removing it clears it", sumEntries(removeEntry(entryList(undefined, 700), "earlier")), 0);
+eq("nothing recorded yet", totalSaved({}), 0);
+
+// The progress bar has to follow the list, not a stale number
+const tracked = allocateGoals(
+  [{ id: 1, title: "iPhone", cost: 2350, date: "2027-01-21",
+     deposits: [{ id: "a", amount: 470 }, { id: "b", amount: 470 }] }],
+  1000
+)[0];
+eq("bar: saved", tracked.saved, 940);
+eq("bar: remaining", tracked.remaining, 1410);
+eq("bar: progress %", Math.round(tracked.progress), 40);
+
+// Debts, the same way
+const tracked2 = planForDebt(
+  { balance: 2400, rate: 19.99, date: null,
+    payments: [{ id: "a", amount: 600 }, { id: "b", amount: 150 }] },
+  2000
+);
+eq("debt: paid", totalPaid({ payments: [{ amount: 600 }, { amount: 150 }] }), 750);
+eq("debt: balance left", tracked2.balance, 1650);
+eq("debt: older save reads", totalPaid({ paid: 600 }), 600);
+
+// Paying extra must not raise the monthly figure on a no-deadline debt
+const before = planForDebt({ balance: 2400, rate: 19.99, date: null }, 2000).payment;
+const after = planForDebt({ balance: 2400, rate: 19.99, date: null,
+  payments: [{ id: "a", amount: 600 }] }, 2000).payment;
+eq("paying extra holds the payment steady", after, before);
 
 console.log("\n" + "=".repeat(62));
 console.log(bad === 0 ? "EVERY CHECK PASSED" : `${bad} PROBLEM(S) FOUND`);
