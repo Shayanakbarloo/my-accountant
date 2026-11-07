@@ -5,7 +5,6 @@ import {
   Cell,
   Sector,
   Tooltip,
-  ResponsiveContainer,
 } from "recharts";
 import { money } from "../lib/format.js";
 
@@ -15,6 +14,8 @@ import { money } from "../lib/format.js";
 // under deuteranopia. That's why the red sits in the middle of the ring
 // rather than next to the green. Checked with a contrast validator; every
 // adjacent pair is separable both in full colour and with colour blindness.
+const CHART_HEIGHT = 280;
+
 const COLOURS = [
   "#3a86c8", // tax           — blue
   "#d9534f", // subscriptions — red
@@ -92,6 +93,30 @@ function Breakdown({ gross, slices, tax, subs, debt, goals, free }) {
   const [openIndex, setOpenIndex] = useState(null); // which category is open
   const boxRef = useRef(null);
 
+  // Recharts' ResponsiveContainer measures its parent — and this chart's
+  // parent is rotated during the entrance animation, so it measured a
+  // sideways box and drew nothing. Measuring an element that is never
+  // transformed, and passing the width in explicitly, avoids the whole
+  // problem.
+  const sizeRef = useRef(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = sizeRef.current;
+    if (!el) return;
+
+    const measure = () => setWidth(el.clientWidth || 0);
+    measure();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // Watches the chart and flips `visible` the first time it scrolls into
   // view. That's what starts the whole entrance.
   useEffect(() => {
@@ -168,6 +193,10 @@ function Breakdown({ gross, slices, tax, subs, debt, goals, free }) {
     setActiveIndex(null);
   }
 
+  // Fit the donut to the narrower of the two dimensions, so it never
+  // overflows a phone screen or stretches on a wide one.
+  const radius = Math.max(40, Math.min(104, Math.min(width, CHART_HEIGHT) / 2 - 36));
+
   const active = activeIndex === null ? null : data[activeIndex];
 
   return (
@@ -203,7 +232,8 @@ function Breakdown({ gross, slices, tax, subs, debt, goals, free }) {
         </p>
       )}
 
-      <div style={{ position: "relative" }}>
+      {/* This wrapper is measured and must never be transformed. */}
+      <div ref={sizeRef} style={{ position: "relative", width: "100%" }}>
         <div
           style={{
             // The entrance: rises, fades in, and unwinds a quarter turn.
@@ -215,10 +245,13 @@ function Breakdown({ gross, slices, tax, subs, debt, goals, free }) {
             transition:
               "opacity 0.7s cubic-bezier(0.28, 0.11, 0.32, 1), " +
               "transform 1.1s cubic-bezier(0.28, 0.11, 0.32, 1)",
+            // Reserve the height before the width is known, so the page
+            // doesn't jump when the chart appears.
+            minHeight: CHART_HEIGHT,
           }}
         >
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
+          {width > 0 && (
+          <PieChart width={width} height={CHART_HEIGHT}>
               <Pie
                 // Changing the key makes React build a fresh pie when you
                 // drill in, so the new slices sweep in rather than morphing.
@@ -226,8 +259,10 @@ function Breakdown({ gross, slices, tax, subs, debt, goals, free }) {
                 data={data}
                 dataKey="value"
                 nameKey="name"
-                innerRadius={68}   // the hole — this is what makes it a donut
-                outerRadius={104}
+                cx="50%"
+                cy="50%"
+                innerRadius={radius * 0.62}  // the hole — this is what makes it a donut
+                outerRadius={radius}
                 paddingAngle={2}   // small gap so slices read separately
                 startAngle={90}    // begin at the top
                 endAngle={-270}    // and go clockwise
@@ -283,8 +318,8 @@ function Breakdown({ gross, slices, tax, subs, debt, goals, free }) {
                   boxShadow: "0 10px 30px rgba(0,0,0,0.14)",
                 }}
               />
-            </PieChart>
-          </ResponsiveContainer>
+          </PieChart>
+          )}
         </div>
 
         {/* Sits in the hole. Shows the total normally, and whatever you're
