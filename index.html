@@ -2,10 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Accountant — Know What You Keep</title>
-    <meta name="description" content="See what you actually earn after tax, subscriptions and debt — and plan what's next." />
+    <meta
+      name="description"
+      content="See what you actually earn after tax, subscriptions and debt — and plan what's next."
+    />
+
+    <!-- viewport-fit=cover lets the page reach under the notch and the home
+         bar; index.css then pads the content back out of their way.
+         user-scalable=no stops iOS zooming when you tap an input. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Installable web app -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1d1d1f" />
+
+    <!-- iOS needs its own tags; it ignores most of the manifest -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- default = dark text on light, matching the app's background -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Accountant" />
   </head>
   <body>
     <div id="root"></div>
