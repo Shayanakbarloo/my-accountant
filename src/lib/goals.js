@@ -51,12 +51,17 @@ export function allocateGoals(goals, available) {
 
   return ordered.map((goal) => {
     const cost = Number(goal.cost) || 0;
+    const saved = Math.min(cost, Math.max(0, Number(goal.saved) || 0));
+    const remaining = cost - saved;
+    const done = remaining <= 0;
+
     const daysLeft = Math.ceil((new Date(goal.date) - new Date()) / MS_PER_DAY);
     const months = daysLeft / DAYS_PER_MONTH;
-    const overdue = months <= 0;
+    const overdue = !done && months <= 0;
 
-    // What it needs each month to land on the date asked for
-    const needed = overdue ? 0 : cost / Math.max(months, 0.1);
+    // Based on what's LEFT, not the original price — so every deposit
+    // you record makes the next one smaller.
+    const needed = overdue || done ? 0 : remaining / Math.max(months, 0.1);
 
     // What it actually gets, after anything above it has taken its share
     const gets = Math.min(needed, left);
@@ -68,20 +73,24 @@ export function allocateGoals(goals, available) {
     // At the rate it's actually getting, when would it finish?
     let realDate = null;
     let realMonths = null;
-    if (!overdue && gets > 0) {
-      realMonths = cost / gets;
+    if (!overdue && !done && gets > 0) {
+      realMonths = remaining / gets;
       realDate = monthYear(dateAfterMonths(realMonths));
     }
 
     return {
       ...goal,
+      saved,
+      remaining,
+      done,
+      progress: cost > 0 ? (saved / cost) * 100 : 0,
       overdue,
       daysLeft,
       needed,
       gets,
       shortfall,
-      onTrack,
-      stalled: !overdue && gets <= 0,
+      onTrack: done || onTrack,
+      stalled: !overdue && !done && gets <= 0,
       realDate,
       // How much later than asked, in months — only meaningful when behind
       monthsLate: realMonths && months > 0 ? Math.max(0, realMonths - months) : 0,

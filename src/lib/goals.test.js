@@ -130,6 +130,40 @@ check("a quarter of it gives the true 7-day figure",
   }
 }
 
+// ---- tracking what you've already saved ----
+{
+  const g = { id: 50, title: "Phone", cost: 2350, date: inMonths(3) };
+  const at = (saved) => allocateGoals([{ ...g, saved }], 99999)[0];
+
+  console.log("\nprogress on a $2,350 goal:");
+  for (const s of [0, 900, 2350]) {
+    const r = at(s);
+    console.log(`  saved $${String(s).padEnd(5)} ${r.progress.toFixed(0).padStart(3)}%  ` +
+      `remaining $${r.remaining}  needs $${r.needed.toFixed(2)}/mo` + (r.done ? "  DONE" : ""));
+  }
+
+  check("progress is saved over cost", Math.abs(at(900).progress - 900/2350*100) < 0.01);
+  check("remaining is cost minus saved", at(900).remaining === 1450);
+  check("saving reduces what's needed", at(900).needed < at(0).needed);
+  check("a finished goal is marked done", at(2350).done);
+  check("a finished goal needs nothing more", at(2350).needed === 0);
+  check("a finished goal takes no money from the pot", at(2350).gets === 0);
+  check("overpaying is capped at the cost", at(9999).saved === 2350);
+  check("negative saved is treated as zero", at(-50).saved === 0);
+  check("missing saved field behaves as zero", allocateGoals([g], 99999)[0].saved === 0);
+
+  // a done goal must free its money up for the others
+  const two = allocateGoals(
+    [{ ...g, id: 1, saved: 2350 }, { id: 2, title: "Korea", cost: 8000, date: inMonths(12) }],
+    700
+  );
+  const korea = two.find((r) => r.title === "Korea");
+  // The finished goal takes nothing, so Korea is funded to whatever it
+  // needs — not capped by the other goal still holding a share.
+  check("a finished goal frees its share for others",
+    Math.abs(korea.gets - korea.needed) < 0.01 && korea.gets > 0);
+}
+
 check("listNames reads naturally", listNames([{name:"A"},{name:"B"},{name:"C"}]) === "A, B And C");
 
 console.log(failed === 0 ? "\nAll checks passed." : `\n${failed} failed.`);

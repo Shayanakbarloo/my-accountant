@@ -23,6 +23,18 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
   const [editingId, setEditingId] = useState(null);
   const [view, setView] = useState("month");
 
+  // What's typed into each goal's "add to savings" box, keyed by goal id
+  const [deposit, setDeposit] = useState({});
+
+  function recordDeposit(goal) {
+    const amount = Number(deposit[goal.id]);
+    if (!amount || amount <= 0) return;
+    // Adds to what's already there, capped at the goal's price
+    const next = Math.min(goal.cost, (Number(goal.saved) || 0) + amount);
+    onEdit(goal.id, { saved: next });
+    setDeposit({ ...deposit, [goal.id]: "" });
+  }
+
   const v = VIEWS[view];
   // Turns a monthly figure into whichever period is being shown
   const inView = (perMonth) => perMonth * v.perMonth;
@@ -112,15 +124,21 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                 Nothing Left To Put Toward This. It Needs{" "}
                 {money(inView(goal.needed))} {v.label}.
               </div>
+            ) : goal.done ? (
+              <div className="row-note good">
+                ★ Fully Saved — You Can Buy It.
+              </div>
             ) : goal.onTrack ? (
               (() => {
-                // Money arrives in lumps, so divide by whole deposits
-                // rather than a fraction of one — see perDeposit().
-                const d = perDeposit(goal.cost, goal.daysLeft, v.days);
+                // Based on what's LEFT, so each deposit you record makes
+                // the next one smaller. Whole deposits, not a fraction of
+                // one — see perDeposit().
+                const d = perDeposit(goal.remaining, goal.daysLeft, v.days);
                 return (
                   <div className="row-note good">
                     Save {money(d.amount)} Every {v.each} — {d.deposits}{" "}
-                    {d.deposits === 1 ? "Payment" : "Payments"} To Go
+                    {d.deposits === 1 ? "Payment" : "Payments"} × {money(d.amount)}{" "}
+                    = {money(goal.remaining)}
                   </div>
                 );
               })()
@@ -134,6 +152,35 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                   At This Rate You'd Have It By {goal.realDate}
                 </div>
               </>
+            )}
+
+            <div className="bar">
+              <div
+                className={`bar-fill${goal.done ? " done" : ""}`}
+                style={{ width: Math.min(100, goal.progress) + "%" }}
+              />
+              <span className="bar-text">
+                {money(goal.saved)} Of {money(goal.cost)} ·{" "}
+                {Math.round(goal.progress)}%
+              </span>
+            </div>
+
+            {!goal.done && (
+              <div className="save-row">
+                <input
+                  type="number"
+                  placeholder="Saved"
+                  value={deposit[goal.id] || ""}
+                  onChange={(e) =>
+                    setDeposit({ ...deposit, [goal.id]: e.target.value })
+                  }
+                  onKeyDown={(e) => e.key === "Enter" && recordDeposit(goal)}
+                />
+                <button onClick={() => recordDeposit(goal)}>Add</button>
+                <span className="muted" style={{ fontSize: 13 }}>
+                  {money(goal.remaining)} To Go
+                </span>
+              </div>
             )}
           </div>
 

@@ -304,3 +304,58 @@ html,
 body {
   overflow-x: hidden;
 }
+
+/* ---------- goal progress ---------- */
+
+.bar {
+  position: relative;
+  height: 22px;
+  background: var(--gray);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 999px;
+  /* Grows smoothly when you record a deposit */
+  transition: width 0.6s cubic-bezier(0.28, 0.11, 0.32, 1);
+}
+
+.bar-fill.done {
+  background: var(--green);
+}
+
+.bar-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  /* Sits above the fill, readable on both halves */
+  mix-blend-mode: difference;
+  color: #fff;
+}
+
+.save-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.save-row input {
+  width: 130px;
+  padding: 8px 12px;
+  font-size: 15px;
+}
+
+.save-row button {
+  padding: 8px 16px;
+  font-size: 14px;
+}
