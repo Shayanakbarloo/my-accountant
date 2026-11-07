@@ -8,7 +8,12 @@ import { monthlyCost } from "./subscriptions.js";
     rather than pretending nothing changed.                               */
 
 const MS_PER_DAY = 86400000;
-const DAYS_PER_MONTH = 30.44;
+
+// The whole app treats a month as four weeks — monthly income is weekly × 4 —
+// so goals have to use the same month, or a goal's "per month" would mean
+// something different from every other figure on the page. It also makes
+// two weeks exactly half a month, which a 30.44-day month is not.
+const DAYS_PER_MONTH = 28;
 
 function monthsUntil(dateString) {
   const days = Math.ceil((new Date(dateString) - new Date()) / MS_PER_DAY);
@@ -16,8 +21,10 @@ function monthsUntil(dateString) {
 }
 
 function dateAfterMonths(months) {
+  // Months here are four-week blocks, so step in days rather than
+  // calendar months — otherwise the finish date drifts.
   const d = new Date();
-  d.setMonth(d.getMonth() + Math.ceil(months));
+  d.setDate(d.getDate() + Math.ceil(months * DAYS_PER_MONTH));
   return d;
 }
 

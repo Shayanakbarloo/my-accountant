@@ -6,7 +6,7 @@ import { allocateGoals, suggestCuts, listNames } from "../lib/goals.js";
 // same as everywhere else in the app.
 const VIEWS = {
   week:     { label: "A Week", perMonth: 1 / 4 },
-  biweekly: { label: "Every Two Weeks", perMonth: 2 / 4 },
+  biweekly: { label: "Biweekly", perMonth: 2 / 4 },
   month:    { label: "A Month", perMonth: 1 },
 };
 
@@ -73,7 +73,7 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
             style={{ width: "auto", padding: "7px 10px", fontSize: 14 }}
           >
             <option value="week">Show Per Week</option>
-            <option value="biweekly">Show Per Two Weeks</option>
+            <option value="biweekly">Show Biweekly</option>
             <option value="month">Show Per Month</option>
           </select>
         )}

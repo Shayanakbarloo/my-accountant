@@ -31,9 +31,14 @@ for (const r of rows) {
 
 check("priority goal is listed first", rows[0].title === "New Phone");
 check("priority is fully funded", rows[0].onTrack);
-// 3 calendar months is ~92 days = 3.02 months, so the real figure is a
-// little under 2300/3. That is correct, not an error.
-check("priority gets what it needs (~$761)", Math.abs(rows[0].gets - 2300/3) < 10);
+// A month here is four weeks, so ~92 days is 3.29 months, not 3.
+// $2,300 / 3.29 = about $700. Checked against the same arithmetic
+// rather than a hardcoded number, so it survives the date moving.
+{
+  const d = Math.ceil((new Date(inMonths(3)) - new Date()) / 86400000);
+  check("priority gets exactly what it needs",
+    Math.abs(rows[0].gets - 2300 / (d / 28)) < 0.01);
+}
 check("other goal gets the remainder", Math.abs(rows[1].gets - (900 - rows[0].gets)) < 1);
 check("other goal is now behind", !rows[1].onTrack);
 check("other goal still has a real date", !!rows[1].realDate);
@@ -85,6 +90,25 @@ check("impossible gap admits it isn't enough", huge.enough === false);
 
 check("no subs -> no suggestion", suggestCuts(50, []) === null);
 check("no shortfall -> no suggestion", suggestCuts(0, subs) === null);
+// ---- the month convention must match the rest of the app ----
+// A month is four weeks everywhere, so two weeks is exactly half a month
+// and one week is exactly a quarter. If these drift, the Goals view
+// disagrees with every other figure on the page.
+const yr = allocateGoals(
+  [{ id: 99, title: "Year Goal", cost: 8000, date: inMonths(12) }],
+  99999
+)[0];
+const perMonth = yr.needed;
+const days = Math.ceil((new Date(inMonths(12)) - new Date()) / 86400000);
+console.log(`\n$8,000 over ${days} days:`);
+console.log(`  per month (4 weeks): $${perMonth.toFixed(2)}`);
+console.log(`  half of that:        $${(perMonth / 2).toFixed(2)}`);
+console.log(`  true 14-day figure:  $${(8000 / (days / 14)).toFixed(2)}`);
+check("a month is 4 weeks, so halving it gives the true 14-day figure",
+  Math.abs(perMonth / 2 - 8000 / (days / 14)) < 0.01);
+check("a quarter of it gives the true 7-day figure",
+  Math.abs(perMonth / 4 - 8000 / (days / 7)) < 0.01);
+
 check("listNames reads naturally", listNames([{name:"A"},{name:"B"},{name:"C"}]) === "A, B And C");
 
 console.log(failed === 0 ? "\nAll checks passed." : `\n${failed} failed.`);
