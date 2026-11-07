@@ -2,15 +2,33 @@
 // Lives here rather than in the component so App can use it too.
 
 export function planForDebt(debt, freeMonthly) {
-  const balance = Number(debt.balance) || 0;
+  const original = Number(debt.balance) || 0;
+
+  // What you've already paid off. Interest is charged on what's LEFT,
+  // so every payment you record makes the next one cheaper.
+  const paid = Math.min(original, Math.max(0, Number(debt.paid) || 0));
+  const balance = original - paid;
+
   const monthlyRate = (Number(debt.rate) || 0) / 100 / 12;
   const monthlyInterest = balance * monthlyRate;
 
+  const progress = original > 0 ? (paid / original) * 100 : 0;
+
   if (balance <= 0) {
-    return { stuck: false, cleared: true, payment: 0, monthlyInterest: 0 };
+    return {
+      stuck: false,
+      cleared: true,
+      payment: 0,
+      monthlyInterest: 0,
+      original,
+      paid,
+      balance: 0,
+      progress: 100,
+    };
   }
 
   let months;
+  let fixedPayment = null; // set only when there's no deadline
 
   if (debt.date) {
     // Deadline set: work backwards from it.
@@ -27,26 +45,45 @@ export function planForDebt(debt, freeMonthly) {
         cleared: false,
         payment: 0,
         monthlyInterest,
+        original,
+        paid,
+        balance,
+        progress,
       };
     }
-    months = Math.ceil(balance / (guess - monthlyInterest));
+    // With no deadline the payment is the thing you choose, so hold it
+    // steady and let the finish date move. Deriving a payment from a
+    // rounded term instead made it jump around as the balance fell —
+    // paying extra could make next month's figure larger, which is daft.
+    fixedPayment = guess;
+    months =
+      monthlyRate === 0
+        ? balance / guess
+        : -Math.log(1 - (monthlyRate * balance) / guess) /
+          Math.log(1 + monthlyRate);
   }
 
-  // Standard loan payment formula. Each payment covers the interest
-  // first, then what's left chips away at the balance.
+  // With a deadline, the payment comes from the standard loan formula:
+  // each payment covers the interest first, then chips at the balance.
   const payment =
-    monthlyRate === 0
+    fixedPayment !== null
+      ? fixedPayment
+      : monthlyRate === 0
       ? balance / months
       : (balance * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
 
   const totalPaid = payment * months;
 
   const payoff = new Date();
-  payoff.setMonth(payoff.getMonth() + months);
+  payoff.setDate(payoff.getDate() + Math.ceil(months * 30.44));
 
   return {
     stuck: false,
     cleared: false,
+    original,
+    paid,
+    balance,
+    progress,
     payment,
     months,
     monthlyInterest,

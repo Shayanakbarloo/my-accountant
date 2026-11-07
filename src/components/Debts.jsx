@@ -9,6 +9,18 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
   const [date, setDate] = useState("");
   const [editingId, setEditingId] = useState(null);
 
+  // What's typed into each debt's "record a payment" box, keyed by id
+  const [payment, setPayment] = useState({});
+
+  function recordPayment(debt) {
+    const amount = Number(payment[debt.id]);
+    if (!amount || amount <= 0) return;
+    // Adds to what's already paid, capped at the original balance
+    const next = Math.min(debt.balance, (Number(debt.paid) || 0) + amount);
+    onEdit(debt.id, { paid: next });
+    setPayment({ ...payment, [debt.id]: "" });
+  }
+
   function startEdit(debt) {
     setEditingId(debt.id);
     setName(debt.name);
@@ -43,7 +55,10 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
     cancel();
   }
 
-  const totalOwed = debts.reduce((sum, debt) => sum + debt.balance, 0);
+  const totalOwed = debts.reduce(
+    (sum, debt) => sum + planForDebt(debt, freeMonthly).balance,
+    0
+  );
 
   return (
     <div>
@@ -62,12 +77,14 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
               <div className="row-title">{debt.name}</div>
 
               <div className="row-note">
-                {money(debt.balance)}
+                {money(plan.balance)} Left Of {money(plan.original)}
                 {debt.rate > 0 && ` At ${debt.rate}%`}
                 {debt.date ? ` · Due ${debt.date}` : " · No Deadline"}
               </div>
 
-              {plan.stuck ? (
+              {plan.cleared ? (
+                <div className="row-note good">★ Paid Off — Nothing Left.</div>
+              ) : plan.stuck ? (
                 <div className="row-note bad">
                   Interest Alone Is {money(plan.monthlyInterest)} A Month — More
                   Than You Have Spare. Set A Deadline Or Cut Costs.
@@ -85,6 +102,35 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
                     </div>
                   )}
                 </>
+              )}
+
+              <div className="bar">
+                <div
+                  className="bar-fill"
+                  style={{ width: Math.min(100, plan.progress) + "%" }}
+                />
+                <span className="bar-text">
+                  {money(plan.paid)} Paid Of {money(plan.original)} ·{" "}
+                  {Math.round(plan.progress)}%
+                </span>
+              </div>
+
+              {!plan.cleared && (
+                <div className="save-row">
+                  <input
+                    type="number"
+                    placeholder="Paid"
+                    value={payment[debt.id] || ""}
+                    onChange={(e) =>
+                      setPayment({ ...payment, [debt.id]: e.target.value })
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && recordPayment(debt)}
+                  />
+                  <button onClick={() => recordPayment(debt)}>Add</button>
+                  <span className="muted" style={{ fontSize: 13 }}>
+                    {money(plan.balance)} To Go
+                  </span>
+                </div>
               )}
             </div>
 
