@@ -1,7 +1,7 @@
 import { yearlyDeductions, PROVINCES } from "./src/lib/tax.js";
 import { monthlyCost, describe } from "./src/lib/subscriptions.js";
 import { planForDebt } from "./src/lib/Debt.js";
-import { allocateGoals, perDeposit, totalSaved } from "./src/lib/goals.js";
+import { allocateGoals, perDeposit, totalSaved, suggestCuts } from "./src/lib/goals.js";
 import { totalPaid } from "./src/lib/Debt.js";
 import { entryList, addEntry, removeEntry, sumEntries, monthStart } from "./src/lib/entries.js";
 
@@ -235,6 +235,32 @@ eq("done only when the total is reached", finished.row.done ? 1 : 0, 1);
 const carried = freeWith([{ id: "earlier", amount: 700, at: null }], NOV);
 eq("older save counts to the total", carried.row.saved, 700);
 eq("  but not to this month", carried.row.putAside, 0);
+
+
+// ---- a shortfall against the ideal pace is not a missed deadline ----
+// The ideal pace uses whole months only, so it finishes early on purpose.
+// Coming in under it while still arriving in time must NOT raise a warning
+// or tell you to cancel a subscription you can afford.
+{
+  const when = new Date(2026, 10, 9);
+  const ask = (spare) => allocateGoals(
+    [{ id: 7, title: "Iphone", cost: 2315, date: "2027-01-21" }], spare, when
+  )[0];
+
+  const need = 2315 / (Math.ceil((new Date("2027-01-21") - when) / 864e5) / 28);
+  const easy = ask(1086);
+  eq("ideal pace asks more than the deadline needs", easy.target > need ? 1 : 0, 1);
+  eq("  below the ideal pace", easy.shortfall > 0.5 ? 1 : 0, 1);
+  eq("  but NOT late", easy.late ? 1 : 0, 0);
+  eq("  so it counts as on track", easy.onTrack ? 1 : 0, 1);
+  eq("  and no cut is suggested", suggestCuts(easy.gap, [{id:1,name:"Guitar",cost:176,every:"month",times:1}]) === null ? 1 : 0, 1);
+
+  eq("the real minimum to make the date", easy.minimum, need);
+  eq("exactly the minimum is on time", ask(need + 0.01).late ? 1 : 0, 0);
+  eq("under the minimum is late", ask(need - 20).late ? 1 : 0, 1);
+  eq("  and the gap is what's missing", ask(need - 20).gap, 20, 0.5);
+  eq("nothing spare stalls", ask(0).stalled ? 1 : 0, 1);
+}
 
 // Debts, the same way
 const payDebt = (payments, when) =>

@@ -102,9 +102,14 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
   // Priority goals are filled first; the rest live on what's left.
   const rows = allocateGoals(goals, freeMonthly);
 
-  // Is anything being starved, and could dropping a subscription fix it?
-  const starved = rows.find((r) => !r.overdue && r.shortfall > 0.5);
-  const advice = starved ? suggestCuts(starved.shortfall, subs) : null;
+  /*  Is anything actually going to miss its date, and could dropping a
+      subscription fix it?
+
+      Keyed on `late`, not on `shortfall`: coming in under the ideal pace
+      is fine as long as the date still gets met. Telling someone to cancel
+      a subscription they can afford is how a budgeting app loses trust. */
+  const starved = rows.find((r) => r.late);
+  const advice = starved ? suggestCuts(starved.gap, subs) : null;
 
   return (
     <div>
@@ -213,16 +218,26 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                     </div>
                   )}
 
-                  {!goal.stalled && !goal.onTrack && (
+                  {!goal.stalled && goal.late && (
                     <>
                       <div className="row-note warn">
-                        Only {money(goal.gets)} Spare For It This Month —{" "}
-                        {money(goal.shortfall)} Short.
+                        Only {money(goal.committed)} Spare For It This Month —{" "}
+                        {money(goal.gap)} Short Of Making The Date.
                       </div>
                       <div className="row-note">
                         At This Rate You'd Have It By {goal.realDate}
                       </div>
                     </>
+                  )}
+
+                  {/*  Below the ideal pace but still arriving in time. Worth
+                       saying out loud, otherwise the gap between what's
+                       asked and what's spare looks like a problem.       */}
+                  {goal.onTrack && !goal.monthDone && goal.shortfall > 0.5 && (
+                    <div className="row-note good">
+                      {money(goal.committed)} Spare For It This Month — Under
+                      The Full Target, But Still In Time For {goal.date}
+                    </div>
                   )}
 
                   {/*  How much of the run is left, so the month sits in
@@ -324,7 +339,7 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
         >
           <strong>To Get {starved.title} Back On Track</strong>
           <div style={{ marginTop: 6 }}>
-            You're {money(inView(starved.shortfall))} {v.label} Short.{" "}
+            You're {money(inView(starved.gap))} {v.label} Short Of Its Date.{" "}
             {advice.enough ? (
               <>
                 Cancelling <strong>{listNames(advice.cuts)}</strong> Would Free
@@ -353,8 +368,7 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
           }}
         >
           <strong>
-            {starved.title} Is Short {money(inView(starved.shortfall))}{" "}
-            {v.label}
+            {starved.title} Is Short {money(inView(starved.gap))} {v.label}
           </strong>
           <div style={{ marginTop: 6 }}>
             There Are No Subscriptions To Cut, So The Options Are A Later Date,

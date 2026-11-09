@@ -54,8 +54,17 @@ function dateAfterMonths(months, today = new Date()) {
   return d;
 }
 
+/*  "Jan 24, 2027" — with the day, not just the month.
+
+    Month precision isn't enough when the point is whether a date gets
+    missed: a goal due 21 Jan that really lands on the 24th would read
+    "January 2027", which looks like it arrived on time.               */
 function monthYear(date) {
-  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /**
@@ -130,8 +139,23 @@ export function allocateGoals(goals, available, today = new Date()) {
         up as less to spend, which is what actually happened.            */
     const committed = putAside + gets;
 
+    // How far this month came up short of the ideal pace
     const shortfall = Math.max(0, stillThisMonth - gets);
-    const onTrack = !overdue && shortfall < 0.5;
+
+    /*  The least you can average each month and still arrive by the date.
+
+        `target` above is the IDEAL pace: whole months only, so it finishes
+        early and leaves a buffer. Falling below it is not the same thing as
+        missing the deadline, and the two were being treated as one. On a
+        $2,315 goal due 21 Jan, the ideal pace asks $1,158 a month while
+        $888 would do — so someone with $1,086 spare was told they were $72
+        short and should cancel a subscription, while the app's own
+        projection had them arriving two weeks early.                     */
+    const minimum = done || overdue ? 0 : remaining / Math.max(months, 0.1);
+    const gap = Math.max(0, minimum - committed);
+    const late = !done && !overdue && gap > 0.5;
+
+    const onTrack = !overdue && !late;
 
     // This month's share is covered — but the goal itself isn't finished
     // until the total is reached, which is what `done` tracks.
@@ -166,9 +190,16 @@ export function allocateGoals(goals, available, today = new Date()) {
 
       gets,
       committed,
+
+      // Short of the ideal pace this month…
       shortfall,
+      // …versus short of what the deadline actually demands
+      minimum,
+      gap,
+      late,
+
       onTrack: done || onTrack,
-      stalled: !overdue && !done && !monthDone && gets <= 0,
+      stalled: !overdue && !done && !monthDone && committed <= 0,
       realDate,
       // How much later than asked, in months — only meaningful when behind
       monthsLate: realMonths && months > 0 ? Math.max(0, realMonths - months) : 0,
