@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { money } from "../lib/format.js";
-import { planForDebt } from "../lib/Debt.js";
+import { planDebts } from "../lib/Debt.js";
 import {
   entryList,
   addEntry,
@@ -82,10 +82,11 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
     cancel();
   }
 
-  const totalOwed = debts.reduce(
-    (sum, debt) => sum + planForDebt(debt, freeMonthly).balance,
-    0
-  );
+  // Every debt planned together — the same plan App uses for the totals,
+  // so a row never disagrees with the chart or Free To Spend.
+  const plans = planDebts(debts, freeMonthly);
+
+  const totalOwed = plans.reduce((sum, plan) => sum + plan.balance, 0);
 
   // The paying month rolls over on the 1st. Nothing is stored for this —
   // each payment carries its own date, so the figures reset on their own.
@@ -100,8 +101,8 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
         <p className="empty">Nothing Owed. Good Place To Be.</p>
       )}
 
-      {debts.map((debt) => {
-        const plan = planForDebt(debt, freeMonthly);
+      {debts.map((debt, i) => {
+        const plan = plans[i];
         const entries = paymentsFor(debt);
         // What the entries actually add up to, before any clamping — so an
         // overpayment can be pointed out rather than silently swallowed.

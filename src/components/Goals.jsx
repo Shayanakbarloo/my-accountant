@@ -18,12 +18,12 @@ import Entries from "./Entries.jsx";
 // How to show the "save this much" figure. A month is four weeks here,
 // same as everywhere else in the app.
 const VIEWS = {
-  week:     { label: "A Week", perMonth: 1 / 4, days: 7, each: "Week" },
-  biweekly: { label: "Biweekly", perMonth: 2 / 4, days: 14, each: "Two Weeks" },
-  month:    { label: "A Month", perMonth: 1, days: 28, each: "Month" },
+  week:     { label: "A Week", days: 7, each: "Week" },
+  biweekly: { label: "Biweekly", days: 14, each: "Two Weeks" },
+  month:    { label: "A Month", days: 28, each: "Month" },
 };
 
-function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
+function Goals({ goals, freeMonthly, payDays = 14, subs, onAdd, onEdit, onRemove }) {
   const [title, setTitle] = useState("");
   const [cost, setCost] = useState("");
   const [date, setDate] = useState("");
@@ -66,14 +66,18 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
   }
 
   const v = VIEWS[view];
-  // Turns a monthly figure into whichever period is being shown
-  const inView = (perMonth) => perMonth * v.perMonth;
+  // Turns a four-week-month figure into whichever period is being shown
+  const inView = (perMonth) => perMonth * (v.days / 28);
+
+  // Which view matches how often you're paid — no need to repeat the
+  // figure in the same period it's already shown in.
+  const payView =
+    Object.keys(VIEWS).find((key) => VIEWS[key].days === payDays) || "biweekly";
 
   // The saving month rolls over on the 1st. Nothing is stored for this —
   // each deposit carries its own date, so the figures reset on their own.
-  const now = new Date();
-  const thisMonthName = monthName(now);
-  const followingMonth = nextMonthName(now);
+  const thisMonthName = monthName();
+  const followingMonth = nextMonthName();
 
   function startEdit(goal) {
     setEditingId(goal.id);
@@ -100,7 +104,7 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
   }
 
   // Priority goals are filled first; the rest live on what's left.
-  const rows = allocateGoals(goals, freeMonthly);
+  const rows = allocateGoals(goals, freeMonthly, new Date(), payDays);
 
   /*  Is anything actually going to miss its date, and could dropping a
       subscription fix it?
@@ -204,12 +208,28 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                     </div>
                   )}
 
-                  {/* The same target, in whichever period you picked */}
-                  {view !== "month" && !goal.monthDone && (
-                    <div className="row-note">
-                      That's {money(inView(goal.target))} Every {v.each} —{" "}
-                      {money(inView(goal.stillThisMonth))} Of It Still To Go
-                    </div>
+                  {/*  The plan itself: the same amount from every paycheque,
+                       with the multiplication shown so it can be checked.
+                       Both figures come from one calculation, so they can
+                       never disagree with each other or with the month
+                       line above (two paycheques = the four-week month).  */}
+                  {!goal.late && !goal.stalled && (
+                    <>
+                      <div className="row-note good">
+                        Save {money(goal.perPaycheque)} Every Paycheque
+                        {view !== payView &&
+                          ` — ${money(
+                            goal.perPaycheque * (v.days / goal.payDays)
+                          )} ${v.label}`}
+                      </div>
+                      <div className="row-note">
+                        {goal.paycheques}{" "}
+                        {goal.paycheques === 1 ? "Paycheque" : "Paycheques"} ×{" "}
+                        {money(goal.perPaycheque)} ={" "}
+                        {money(goal.perPaycheque * goal.paycheques)}, Covering
+                        The {money(goal.planFrom)} Left On {thisMonthName} 1
+                      </div>
+                    </>
                   )}
 
                   {goal.stalled && (
@@ -230,29 +250,6 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                     </>
                   )}
 
-                  {/*  How much of the run is left, so the month sits in
-                       context. Deliberately no dollar figure here: this
-                       month's target was set from the 1st, and a second,
-                       freshly-recalculated rate alongside it would just
-                       look like the app contradicting itself.           */}
-                  {goal.onTrack && !goal.monthDone && (
-                    <div className="row-note good">
-                      {(() => {
-                        /*  Calendar months, counted the way the plan
-                            actually splits the money. Counting 28-day
-                            blocks said "2 months" for a run that pays
-                            across November, December and January.      */
-                        const due = new Date(goal.date + "T00:00:00");
-                        const after =
-                          (due.getFullYear() - now.getFullYear()) * 12 +
-                          (due.getMonth() - now.getMonth());
-                        if (after <= 0) return "Due This Month";
-                        return `${after} More ${
-                          after === 1 ? "Month" : "Months"
-                        } After This One`;
-                      })()}
-                    </div>
-                  )}
                 </>
               )}
 

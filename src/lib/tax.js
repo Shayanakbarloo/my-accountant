@@ -14,9 +14,19 @@ const FEDERAL = [
 ];
 const FEDERAL_PERSONAL = 16452;
 
-// Payroll deductions — not income tax, but they leave your paycheque too
+// Every employee gets this federal credit for work expenses (CRA T4032,
+// 2026). Yukon mirrors it at its own lowest rate.
+const CANADA_EMPLOYMENT_AMOUNT = 1501;
+
+/*  Payroll deductions — not income tax, but they leave your paycheque too.
+
+    CPP is two contributions sharing one rate. The BASE 4.95% earns a tax
+    credit like any other. The newer "enhanced" part — the extra 1%, plus
+    all of CPP2 — is instead deducted from income before tax is worked
+    out. The app used to do neither, which overstated tax for everyone.  */
 const CPP = {
   rate: 0.0595,
+  baseRate: 0.0495,
   exempt: 3500,
   ceiling: 74600,
   extraCeiling: 85000,
@@ -26,7 +36,14 @@ const EI = { rate: 0.0163, ceiling: 68900 };
 
 // Quebec runs its own pension plan and parental insurance, pays a lower EI
 // rate, and its residents get 16.5% knocked off their federal tax.
-const QPP = { rate: 0.063, exempt: 3500, ceiling: 74600, extraCeiling: 85000, extraRate: 0.04 };
+const QPP = {
+  rate: 0.063,
+  baseRate: 0.053,
+  exempt: 3500,
+  ceiling: 74600,
+  extraCeiling: 85000,
+  extraRate: 0.04,
+};
 const QPIP = { rate: 0.0043, ceiling: 103000 };
 const QC_EI = { rate: 0.013, ceiling: 68900 };
 const QC_ABATEMENT = 0.165;
@@ -47,6 +64,9 @@ export const PROVINCES = {
       [50363, 0.0506], [100728, 0.077], [115648, 0.105], [140430, 0.1229],
       [190405, 0.147], [265545, 0.168], [Infinity, 0.205],
     ],
+    // Low-income tax reduction: up to $575, shrinking by 3.56% of income
+    // over $25,570 until it's gone at $41,722 (CRA T4127, 2026).
+    reduction: { amount: 575, from: 25570, rate: 0.0356 },
   },
   MB: {
     name: "Manitoba",
@@ -60,7 +80,9 @@ export const PROVINCES = {
   },
   NL: {
     name: "Newfoundland and Labrador",
-    bpa: 11188,
+    // Raised from $11,188 to $15,000 on 1 July 2026 by the spring budget.
+    // Half a year at each gives the 2026 figure: $13,094.
+    bpa: 13094,
     brackets: [
       [44678, 0.087], [89354, 0.145], [159528, 0.158], [223340, 0.178],
       [285319, 0.198], [570638, 0.208], [1141275, 0.213], [Infinity, 0.218],
@@ -95,6 +117,8 @@ export const PROVINCES = {
     // plus an income-tested health premium.
     surtax: [[5818, 0.20], [7446, 0.36]],
     health: true,
+    // Low-income tax reduction: twice $300, less the tax owed, if positive.
+    ontarioReduction: 300,
   },
   PE: {
     name: "Prince Edward Island",
@@ -122,6 +146,8 @@ export const PROVINCES = {
       [58523, 0.064], [117045, 0.09], [181440, 0.109],
       [500000, 0.128], [Infinity, 0.15],
     ],
+    // The only territory that mirrors the federal employment amount
+    employmentAmount: true,
   },
 };
 
@@ -159,49 +185,98 @@ function healthPremium(income) {
 /**
  * Give it a yearly income and a province code, get back every deduction.
  * Defaults to Ontario so old saves keep working.
+ *
+ * Follows the CRA's payroll formulas (T4127, 2026) — the same arithmetic
+ * an employer uses to work out what comes off each paycheque. tax.test.js
+ * checks it against the CRA's own worked Ontario example.
+ *
+ * `rrsp` is a yearly RRSP contribution made through payroll. The app
+ * doesn't ask for one; it's here so the test can reproduce the CRA
+ * example exactly, which includes one.
  */
-export function yearlyDeductions(yearlyIncome, provinceCode = "ON") {
+export function yearlyDeductions(yearlyIncome, provinceCode = "ON", { rrsp = 0 } = {}) {
   const province = PROVINCES[provinceCode] || PROVINCES.ON;
+  const income = Math.max(0, Number(yearlyIncome) || 0);
+
+  // --- payroll: pension, EI, parental insurance ---
+  const pension = province.quebec ? QPP : CPP;
+  const pensionable = Math.max(
+    0,
+    Math.min(income, pension.ceiling) - pension.exempt
+  );
+  const pensionBase = pensionable * pension.baseRate;
+  const pensionEnhanced =
+    pensionable * (pension.rate - pension.baseRate) +
+    Math.max(0, Math.min(income, pension.extraCeiling) - pension.ceiling) *
+      pension.extraRate;
+  const pensionAmount = pensionBase + pensionEnhanced;
+
+  const eiPlan = province.quebec ? QC_EI : EI;
+  const ei = Math.min(income, eiPlan.ceiling) * eiPlan.rate;
+
+  const parental = province.quebec
+    ? Math.min(income, QPIP.ceiling) * QPIP.rate
+    : 0;
+
+  /*  Taxable income. The enhanced pension contributions come off before
+      tax is worked out — they're treated like an RRSP deduction, not a
+      credit. So does anything put into an RRSP through payroll.        */
+  const taxable = Math.max(0, income - pensionEnhanced - rrsp);
+
+  // Canada employment amount, capped at what you actually earned
+  const employment = Math.min(CANADA_EMPLOYMENT_AMOUNT, taxable);
 
   // --- federal ---
-  let federal = Math.max(
-    0,
-    applyBrackets(yearlyIncome, FEDERAL) - FEDERAL_PERSONAL * 0.14
-  );
+  /*  Every credit is worth the lowest federal rate, 14%. Before, only the
+      basic personal amount was applied — the CPP, EI and employment
+      credits were missing, which overstated tax by about $1,200 a year
+      at $67,600.                                                        */
+  const federalCredits =
+    0.14 * (FEDERAL_PERSONAL + pensionBase + ei + parental + employment);
+  let federal = Math.max(0, applyBrackets(taxable, FEDERAL) - federalCredits);
+
   // Quebec residents pay 16.5% less federal tax, because Quebec runs
   // programs Ottawa runs everywhere else.
   if (province.quebec) federal = federal * (1 - QC_ABATEMENT);
 
   // --- provincial ---
   const lowestRate = province.brackets[0][1];
+
+  // Provinces credit the same CPP and EI contributions at their own lowest
+  // rate. Quebec handles these differently on its own return, so it only
+  // gets the basic personal amount here.
+  let provincialCredits =
+    lowestRate * (province.bpa + (province.quebec ? 0 : pensionBase + ei));
+  if (province.employmentAmount) provincialCredits += lowestRate * employment;
+
   let provincial = Math.max(
     0,
-    applyBrackets(yearlyIncome, province.brackets) - province.bpa * lowestRate
+    applyBrackets(taxable, province.brackets) - provincialCredits
   );
 
-  // Ontario's surtax is charged on the tax owing, not on income.
+  // Ontario's surtax is charged on the tax owing, not on income — and on
+  // the ORIGINAL tax figure for both bands, so they're measured together.
   if (province.surtax) {
+    const basic = provincial;
     for (const [threshold, rate] of province.surtax) {
-      if (provincial > threshold) provincial += (provincial - threshold) * rate;
+      if (basic > threshold) provincial += (basic - threshold) * rate;
     }
   }
 
-  const health = province.health ? healthPremium(yearlyIncome) : 0;
+  // Ontario: twice $300, less the tax owed, comes off — if that's positive.
+  if (province.ontarioReduction) {
+    const cut = 2 * province.ontarioReduction - provincial;
+    if (cut > 0) provincial -= Math.min(provincial, cut);
+  }
 
-  // --- payroll ---
-  const pension = province.quebec ? QPP : CPP;
-  const pensionAmount =
-    Math.max(0, Math.min(yearlyIncome, pension.ceiling) - pension.exempt) *
-      pension.rate +
-    Math.max(0, Math.min(yearlyIncome, pension.extraCeiling) - pension.ceiling) *
-      pension.extraRate;
+  // British Columbia: up to $575 off, phasing out as income rises.
+  if (province.reduction) {
+    const r = province.reduction;
+    const cut = r.amount - Math.max(0, taxable - r.from) * r.rate;
+    if (cut > 0) provincial -= Math.min(provincial, cut);
+  }
 
-  const eiPlan = province.quebec ? QC_EI : EI;
-  const ei = Math.min(yearlyIncome, eiPlan.ceiling) * eiPlan.rate;
-
-  const parental = province.quebec
-    ? Math.min(yearlyIncome, QPIP.ceiling) * QPIP.rate
-    : 0;
+  const health = province.health ? healthPremium(taxable) : 0;
 
   return {
     federal,
@@ -210,6 +285,7 @@ export function yearlyDeductions(yearlyIncome, provinceCode = "ON") {
     cpp: pensionAmount,
     ei,
     parental,
+    taxable,
     provinceName: province.name,
     pensionLabel: province.quebec ? "QPP" : "CPP",
     total: federal + provincial + health + pensionAmount + ei + parental,

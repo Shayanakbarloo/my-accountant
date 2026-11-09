@@ -41,9 +41,18 @@ const MS_PER_DAY = 86400000;
 // two weeks exactly half a month, which a 30.44-day month is not.
 const DAYS_PER_MONTH = 28;
 
-function monthsUntil(dateString) {
-  const days = Math.ceil((new Date(dateString) - new Date()) / MS_PER_DAY);
-  return days / DAYS_PER_MONTH;
+/*  Whole days from one calendar date to another.
+
+    Both ends are turned into plain dates first, so the answer is always a
+    whole number. Subtracting real timestamps isn't: "2027-01-21" is read
+    as midnight UTC — 7pm the day before in Toronto — and clocks change on
+    1 November, so the same two dates could come out 80.8 or 81.04 days
+    apart depending on the time of day you looked.                       */
+function daysBetween(from, dateString) {
+  const [y, m, d] = String(dateString).split("-").map(Number);
+  const end = Date.UTC(y, m - 1, d);
+  const start = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate());
+  return Math.round((end - start) / MS_PER_DAY);
 }
 
 function dateAfterMonths(months, today = new Date()) {
@@ -76,8 +85,11 @@ function monthYear(date) {
  *
  * `today` is injectable so the month-rollover behaviour can be tested
  * without waiting for December.
+ *
+ * `payDays` is how often you're paid, in days — 14 for biweekly. The plan
+ * is built on paycheques because that's when money actually arrives.
  */
-export function allocateGoals(goals, available, today = new Date()) {
+export function allocateGoals(goals, available, today = new Date(), payDays = 14) {
   const pot = Math.max(0, available);
 
   const ordered = [
@@ -106,46 +118,43 @@ export function allocateGoals(goals, available, today = new Date()) {
 
     const putAside = Math.min(cost, savedThisMonth(goal, today));
 
-    const daysLeft = Math.ceil((new Date(goal.date) - today) / MS_PER_DAY);
+    // Whole days, so "73 days away" is always exactly 73
+    const daysLeft = daysBetween(today, goal.date);
     const months = daysLeft / DAYS_PER_MONTH;
-    const overdue = !done && months <= 0;
+    // Due today isn't overdue — there's still today to put the money in.
+    const overdue = !done && daysLeft < 0;
 
-    /*  This month's target is worked out from where the goal stood on the
-        1st — not from where it stands right now.
+    /*  The plan is worked out from where the goal stood on the 1st — not
+        from where it stands right now.
 
-        That distinction is the whole point. Recalculated after every
-        deposit, paying into a goal would shrink the very target it was
-        paying into: put $470 away and the app would quietly decide the goal
-        needed $178 less per month, then hand you that $178 back as money to
-        spend. Pinned to the 1st, the target holds all month, so a deposit
-        pays the target down instead of moving it.                        */
+        Recalculated after every deposit, paying into a goal would shrink
+        the very figure it was paying into: put $470 away and the app would
+        decide the goal needed less, then hand that money back as "free to
+        spend". Pinned to the 1st, the plan holds all month.               */
     const atMonthStart = Math.min(cost, remaining + putAside);
+    const daysInRun = Math.max(0, daysBetween(start, goal.date));
 
-    /*  This month's fair share: the days of this month that fall inside the
-        run, over all the days left in the run.
+    /*  The plan: the same amount from every paycheque, in WHOLE paycheques.
 
-        $2,315 due 21 Jan, counted from 1 Nov, is 81 days. November owns 30
-        of them, so November's share is 30/81 of the goal — $857. December
-        takes $886, the 21 days of January take $572, and the three add up
-        to exactly $2,315 on exactly the right day.
+        $2,315 due 21 Jan, counted from 1 Nov, is 81 days. Paid every 14
+        days, that's 5 paycheques that land before the date — so $463 from
+        each, and 5 × $463 is exactly $2,315.
 
-        The earlier version split the run into whole 28-day months and
-        ignored the leftover days, which asked for $1,158 a month and
-        finished three weeks early. That sounds harmless until the goal is
-        big: chasing it swallowed every spare dollar, so Free To Spend read
-        $0 on a month where $229 was genuinely free.                      */
-    const daysInRun = Math.max(
-      1,
-      Math.ceil((new Date(goal.date) - start) / MS_PER_DAY)
-    );
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    const daysThisMonth = Math.min(
-      daysInRun,
-      Math.round((nextMonth - start) / MS_PER_DAY)
-    );
+        Last round split the run by calendar days instead. Its total landed
+        on the date, but the per-paycheque figure it implied did not:
+        November's $857 halved to "$429 every two weeks", and five of those
+        come to $2,145 — $170 short. Every figure has to be one you can
+        actually follow.                                                  */
+    const plan = perDeposit(atMonthStart, daysInRun, payDays);
+    const perPaycheque = done || overdue ? 0 : plan.amount;
 
+    /*  This month's target: the paycheques a four-week month holds — two,
+        if you're paid every two weeks — the same four-week month the
+        income above is measured in. Never more than what's left.        */
     const target =
-      done || overdue ? 0 : atMonthStart * (daysThisMonth / daysInRun);
+      done || overdue
+        ? 0
+        : Math.min(atMonthStart, perPaycheque * (DAYS_PER_MONTH / payDays));
 
     // What's still to go this month, and what the pot can actually cover
     const stillThisMonth = Math.max(0, target - putAside);
@@ -188,6 +197,12 @@ export function allocateGoals(goals, available, today = new Date()) {
       progress: cost > 0 ? (saved / cost) * 100 : 0,
       overdue,
       daysLeft,
+
+      // ---- the plan: the same amount from every paycheque ----
+      perPaycheque,
+      paycheques: plan.deposits,
+      planFrom: atMonthStart,
+      payDays,
 
       // ---- this month, which starts over on the 1st ----
       putAside,
@@ -270,8 +285,14 @@ export function listNames(items) {
  * fraction of a payday. Dividing by 5.36 gives a figure that only works if
  * a deposit happens today; miss that and you arrive short. Rounding the
  * number of deposits DOWN is the only version that can't fail.
+ *
+ * The amount is rounded UP to the cent for the same reason. $2,315 over 7
+ * deposits is $330.714…; shown as $330.71, seven of those come to
+ * $2,314.97 — three cents short of a goal that was meant to be reached.
  */
 export function perDeposit(cost, daysLeft, periodDays) {
   const deposits = Math.max(1, Math.floor(daysLeft / periodDays));
-  return { deposits, amount: cost / deposits };
-}
+  // The tiny nudge stops float noise (463.00000000001) rounding up a cent
+  const amount = Math.ceil((cost / deposits) * 100 - 1e-6) / 100;
+  return { deposits, amount };
+} 

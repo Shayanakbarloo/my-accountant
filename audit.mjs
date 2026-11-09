@@ -1,6 +1,7 @@
 import { yearlyDeductions, PROVINCES } from "./src/lib/tax.js";
 import { monthlyCost, describe } from "./src/lib/subscriptions.js";
-import { planForDebt } from "./src/lib/Debt.js";
+import { planForDebt, planDebts } from "./src/lib/Debt.js";
+import { money } from "./src/lib/format.js";
 import { allocateGoals, perDeposit, totalSaved, suggestCuts } from "./src/lib/goals.js";
 import { totalPaid } from "./src/lib/Debt.js";
 import { entryList, addEntry, removeEntry, sumEntries, monthStart } from "./src/lib/entries.js";
@@ -23,22 +24,34 @@ eq("biweekly = 2 weeks", weekly * 2, 2000);
 eq("true annual = 52 weeks", weekly * 52, 52000);
 
 console.log("\n" + "=".repeat(62));
-console.log("2. TAX  (Ontario, $52,000)");
+console.log("2. TAX  (Ontario, $52,000) — the CRA's method, worked by hand");
 console.log("=".repeat(62));
+// This section used to recompute tax applying ONLY the basic personal
+// amount — the same gap the app had — so it agreed with the app while both
+// overstated tax by about $900 at this income. Written out the CRA's way:
 const d = yearlyDeductions(52000, "ON");
-// independently: federal 14% on 52000 less BPA credit
-const fedExpected = 52000 * 0.14 - 16452 * 0.14;
-eq("federal (all in first bracket)", d.federal, fedExpected);
-const onBase = 52000 * 0.0505 - 12989 * 0.0505;
-eq("ontario base (no surtax at this level)", d.provincial - d.health, onBase);
+const pensionable = 52000 - 3500;          // CPP starts after $3,500
+const cppBase = pensionable * 0.0495;      // base CPP  → earns a credit
+const cppEnhanced = pensionable * 0.01;    // the extra 1% → comes off income
+const eiPaid = 52000 * 0.0163;
+const taxable = 52000 - cppEnhanced;
+eq("taxable income (enhanced CPP deducted)", d.taxable, taxable);
+// Federal: all of it in the 14% band, less 14% of every credit
+const fedExpected = taxable * 0.14 - 0.14 * (16452 + cppBase + eiPaid + 1501);
+eq("federal (BPA, CPP, EI, employment credits)", d.federal, fedExpected);
+// Ontario: all in the 5.05% band, less 5.05% of its credits
+const onBase = taxable * 0.0505 - 0.0505 * (12989 + cppBase + eiPaid);
+eq("ontario (BPA, CPP, EI credits; no surtax)", d.provincial - d.health, onBase);
 eq("health premium at $52k", d.health, 600);
-const cppExp = (Math.min(52000, 74600) - 3500) * 0.0595;
-eq("CPP", d.cpp, cppExp);
-eq("EI", d.ei, Math.min(52000, 68900) * 0.0163);
+eq("CPP", d.cpp, pensionable * 0.0595);
+eq("EI", d.ei, eiPaid);
 eq("total is the sum", d.total, d.federal + d.provincial + d.cpp + d.ei + d.parental);
 
-console.log("\n  anchor: $80,000 Ontario must leave $58,933");
-eq("  take-home", 80000 - yearlyDeductions(80000, "ON").total, 58933, 1);
+console.log("\n  anchor: the CRA's own worked example (T4032-ON 2026, example 1)");
+const craEx = yearlyDeductions(1300 * 52, "ON", { rrsp: 80 * 52 });
+eq("  federal tax for the year", craEx.federal, 5957.85, 1);
+eq("  Ontario tax for the year", craEx.provincial, 3264.26, 1);
+eq("  combined", craEx.federal + craEx.provincial, 9222.11, 1);
 
 console.log("\n" + "=".repeat(62));
 console.log("3. SUBSCRIPTIONS");
@@ -86,12 +99,19 @@ console.log(`  (${days} days away)`);
 const g = allocateGoals([{id:1,title:"iPhone",cost:2350,date:"2027-01-21"}], 99999)[0];
 eq("daysLeft", g.daysLeft, days, 1);
 
-// This month's target is set from where the goal stood on the 1st, over the
-// whole 28-day periods left from then — not from today, and not as a
-// fraction of a period. Pinning it to the 1st is what stops a deposit
-// shrinking the target it is paying into.
-const fromFirst = Math.ceil((new Date("2027-01-21") - monthStart()) / 864e5);
-eq("this month's target", g.target, perDeposit(2350, fromFirst, 28).amount);
+// This month's target is the days of this month that fall inside the run,
+// over all the days left in the run, counted from the 1st. Pinning it to the
+// 1st is what stops a deposit shrinking the target it is paying into.
+// The plan: whole paycheques (biweekly) counted from the 1st, and this
+// month's target is the two paycheques a four-week month holds.
+const first = monthStart();
+const runDays = Math.round(
+  (Date.UTC(2027, 0, 21) - Date.UTC(first.getFullYear(), first.getMonth(), 1)) / 864e5
+);
+const plan = perDeposit(2350, runDays, 14);
+eq("per paycheque", g.perPaycheque, plan.amount);
+eq("  whole paycheques cover the goal", g.perPaycheque * g.paycheques >= 2350 ? 1 : 0, 1);
+eq("this month's target = two paycheques", g.target, Math.min(2350, plan.amount * 2));
 eq("  nothing put aside yet", g.putAside, 0);
 eq("  so it's all still to go", g.stillThisMonth, g.target);
 eq("  and the month isn't covered", g.monthDone ? 1 : 0, 0);
@@ -202,20 +222,20 @@ const freeWith = (deposits, when) => {
 };
 
 const none = freeWith([], NOV);
-const one = freeWith([dep(470, "2026-11-08")], NOV);
-const two = freeWith([dep(470, "2026-11-08"), dep(470, "2026-11-12")], NOV);
+const one = freeWith([dep(400, "2026-11-08")], NOV);
+const two = freeWith([dep(400, "2026-11-08"), dep(400, "2026-11-12")], NOV);
 
-eq("free to spend, nothing saved", none.free, 1940.30);
-eq("free to spend after $470 put aside", one.free, none.free);
-eq("free to spend after $940 put aside", two.free, none.free);
+eq("free to spend, nothing saved", none.free, pot - none.row.target);
+eq("free to spend after $400 put aside", one.free, none.free);
+eq("free to spend after $800 put aside", two.free, none.free);
 eq("  this month's target held still", two.row.target, none.row.target);
-eq("  and the deposits count toward it", two.row.putAside, 940);
+eq("  and the deposits count toward it", two.row.putAside, 800);
 
 // Going past the month's target really does leave less to spend
 const over = [dep(470,"2026-11-08"), dep(470,"2026-11-12"),
               dep(470,"2026-11-15"), dep(470,"2026-11-20")];
 const big = freeWith(over, NOV);
-eq("overshooting leaves less to spend", big.free, none.free - (1880 - 1175));
+eq("overshooting leaves less to spend", big.free, pot - 1880);
 eq("  month shows as covered", big.row.monthDone ? 1 : 0, 1);
 eq("  but the goal is NOT done", big.row.done ? 1 : 0, 0);
 
@@ -237,28 +257,53 @@ eq("older save counts to the total", carried.row.saved, 700);
 eq("  but not to this month", carried.row.putAside, 0);
 
 
-// ---- a shortfall against the ideal pace is not a missed deadline ----
-// The ideal pace uses whole months only, so it finishes early on purpose.
-// Coming in under it while still arriving in time must NOT raise a warning
-// or tell you to cancel a subscription you can afford.
+// ---- the plan is whole paycheques, and every figure can be followed ----
+// $2,315 due 21 Jan, counted from 1 Nov, is 81 days: 5 biweekly paycheques,
+// so $463 from each. An earlier version split the run by calendar days —
+// November $857 — which implied "$429 every two weeks", and five of those
+// fall $170 short. The figure you act on has to be one that works.
 {
   const when = new Date(2026, 10, 9);
-  const ask = (spare) => allocateGoals(
-    [{ id: 7, title: "Iphone", cost: 2315, date: "2027-01-21" }], spare, when
+  const ask = (spare, today = when) => allocateGoals(
+    [{ id: 7, title: "Iphone", cost: 2315, date: "2027-01-21" }], spare, today, 14
   )[0];
 
-  const need = 2315 / (Math.ceil((new Date("2027-01-21") - when) / 864e5) / 28);
-  const easy = ask(1086);
-  eq("ideal pace asks more than the deadline needs", easy.target > need ? 1 : 0, 1);
-  eq("  below the ideal pace", easy.shortfall > 0.5 ? 1 : 0, 1);
-  eq("  but NOT late", easy.late ? 1 : 0, 0);
-  eq("  so it counts as on track", easy.onTrack ? 1 : 0, 1);
-  eq("  and no cut is suggested", suggestCuts(easy.gap, [{id:1,name:"Guitar",cost:176,every:"month",times:1}]) === null ? 1 : 0, 1);
+  const nov = ask(1086);
+  eq("$463 from every paycheque", nov.perPaycheque, 463);
+  eq("  five of them", nov.paycheques, 5);
+  eq("  5 x $463 = $2,315 exactly", nov.perPaycheque * nov.paycheques, 2315);
+  eq("November's target = two paycheques", nov.target, 926);
+  eq("  it takes only that", nov.committed, 926);
+  eq("  leaving the rest to spend", 1086 - nov.committed, 160);
+  eq("  not flagged late", nov.late ? 1 : 0, 0);
+  eq("  and no cut suggested",
+     suggestCuts(nov.shortfall, [{id:1,name:"Guitar",cost:176,every:"month",times:1}]) === null ? 1 : 0, 1);
 
-  eq("the real minimum to make the date", easy.minimum, need);
-  eq("exactly the minimum is on time", ask(need + 0.01).late ? 1 : 0, 0);
-  eq("under the minimum is late", ask(need - 20).late ? 1 : 0, 1);
-  eq("  and the gap is what's missing", ask(need - 20).gap, 20, 0.5);
+  // Follow the plan paycheque by paycheque: it must hold steady and finish
+  // on or before the date.
+  let paid = [];
+  let when2 = new Date(2026, 10, 13);
+  let amounts = new Set();
+  let finished = null;
+  for (let i = 0; i < 10; i++) {
+    const row = allocateGoals(
+      [{ id: 7, title: "Iphone", cost: 2315, date: "2027-01-21", deposits: paid }],
+      99999, when2, 14
+    )[0];
+    if (row.done) { finished = when2; break; }
+    amounts.add(row.perPaycheque);
+    const iso = `${when2.getFullYear()}-${String(when2.getMonth()+1).padStart(2,"0")}-${String(when2.getDate()).padStart(2,"0")}`;
+    paid = [...paid, { id: iso, amount: Math.min(row.perPaycheque, row.remaining), at: iso }];
+    when2 = new Date(when2.getFullYear(), when2.getMonth(), when2.getDate() + 14);
+  }
+  eq("following it, the figure never moves", amounts.size, 1);
+  eq("  and the 5th deposit lands before Jan 21", paid.length, 5);
+  eq("  on Jan 8", paid[4].at === "2027-01-08" ? 1 : 0, 1);
+
+  // A goal that really is unaffordable must still raise the alarm
+  const broke = ask(200);
+  eq("an unaffordable plan is late", broke.late ? 1 : 0, 1);
+  eq("  short by what's missing", broke.shortfall, 926 - 200);
   eq("nothing spare stalls", ask(0).stalled ? 1 : 0, 1);
 }
 
@@ -271,6 +316,77 @@ eq("debt: monthly figure holds still", dPaid.payment, dNone.payment);
 eq("debt: committed unchanged by paying", dPaid.committed, dNone.committed);
 eq("debt: payment counts toward the month", dPaid.paidNow, 200);
 eq("debt: December starts over", payDebt([dep(200, "2026-11-08")], DEC).paidNow, 0);
+
+console.log("\n" + "=".repeat(62));
+console.log("9. DISPLAY, CHART AND DEBT PLANNING");
+console.log("=".repeat(62));
+
+// Money shows cents when there are any, so every figure multiplies out.
+// Rounding to the dollar turned $1,157.50 into "$1,158", and $1,158 × 2 is
+// a dollar more than the $2,315 goal it was meant to add up to.
+const shows = (got, want) => eq(`money shows ${want}`, got === want ? 1 : 0, 1);
+shows(money(1157.5), "$1,157.50");
+shows(money(2315), "$2,315");
+shows(money(463), "$463");
+shows(money(231.5), "$231.50");
+shows(money(0.05), "$0.05");
+shows(money(0), "$0");
+
+// Deposit amounts round UP to the cent, so they always reach the goal
+const seven = perDeposit(2315, 100, 14);
+eq("7 deposits round up, never short", seven.amount * seven.deposits >= 2315 ? 1 : 0, 1);
+eq("  by no more than a few cents", seven.amount * seven.deposits - 2315 < 0.07 ? 1 : 0, 1);
+
+// The chart's tax slice is a four-week month: yearly × 4/52. Its parts were
+// divided by 12 calendar months, so they added up to MORE than the slice.
+{
+  const yr = yearlyDeductions(52000, "ON");
+  const slice = 4000 * (yr.total / 52000);
+  const parts = [yr.federal, yr.provincial, yr.cpp, yr.ei, yr.parental]
+    .reduce((t, x) => t + (x / 52) * 4, 0);
+  eq("tax parts add up to the tax slice", parts, slice);
+}
+
+// Debts without a deadline SHARE one quarter of what's spare. Each used to
+// take a quarter on its own — five of them claimed 125%.
+{
+  const cards = (n) => Array.from({ length: n }, (_, i) =>
+    ({ id: i, name: "Card " + i, balance: 1500, rate: 19.99, date: null }));
+  for (const n of [1, 2, 5]) {
+    const total = planDebts(cards(n), 2000).reduce((t, p) => t + p.committed, 0);
+    eq(`${n} open debt(s) share one quarter`, total, 500);
+  }
+  // Split by balance: owing three times as much gets three times the share
+  const split = planDebts([
+    { id: 1, name: "Big", balance: 3000, rate: 0, date: null },
+    { id: 2, name: "Small", balance: 1000, rate: 0, date: null },
+  ], 2000);
+  eq("  shared by balance", split[0].payment / split[1].payment, 3);
+}
+
+// A deadline counts one payment per calendar month up to the due date.
+// Dividing by 30.44 days and rounding up counted a payment that would land
+// AFTER a 1 February deadline, so the plan finished in March.
+{
+  const NOV9 = new Date(2026, 10, 9);
+  const due = (date) => planForDebt({ balance: 3000, rate: 0, date }, 2000, NOV9);
+  eq("due Feb 1: Nov, Dec, Jan", due("2027-02-01").months, 3);
+  eq("  clears in January", due("2027-02-01").payoffLabel === "January 2027" ? 1 : 0, 1);
+  eq("due Feb 15: Feb counts too", due("2027-02-15").months, 4);
+  const visa = planForDebt({ balance: 2400, rate: 19.99, date: "2027-06-01" }, 3000, NOV9);
+  let owed = 2400;
+  for (let k = 0; k < visa.months; k++) owed = owed * (1 + 0.1999 / 12) - visa.payment;
+  eq("with interest, the payments clear it exactly", owed, 0);
+}
+
+// Day counts are whole numbers, whatever the time of day or the clocks
+{
+  const at = (h) => allocateGoals(
+    [{ id: 1, title: "x", cost: 1000, date: "2027-01-21" }], 99999,
+    new Date(2026, 10, 9, h), 14)[0].daysLeft;
+  eq("73 days at midnight", at(0), 73);
+  eq("73 days at 11pm", at(23), 73);
+}
 
 console.log("\n" + "=".repeat(62));
 console.log(bad === 0 ? "EVERY CHECK PASSED" : `${bad} PROBLEM(S) FOUND`);

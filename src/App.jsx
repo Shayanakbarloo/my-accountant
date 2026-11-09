@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { money } from "./lib/format.js";
 import { yearlyDeductions, PROVINCES } from "./lib/tax.js";
 import { monthlyCost } from "./lib/subscriptions.js";
-import { planForDebt } from "./lib/Debt.js";
+import { planDebts } from "./lib/Debt.js";
 import { allocateGoals } from "./lib/goals.js";
 import Subscriptions from "./components/Subscriptions.jsx";
 import Debts from "./components/Debts.jsx";
@@ -98,17 +98,19 @@ function App() {
       month as well as what's still to go. Using `payment` alone meant a
       payment you'd already made was never taken out of this month's
       money, so paying your card made the app think you were richer.    */
-  const debtCost = debts.reduce(
-    (total, debt) => total + planForDebt(debt, leftOver).committed,
-    0
-  );
+  //  Planned together, so several debts without deadlines share one budget
+  //  instead of each claiming a quarter of your spare money on its own.
+  const debtPlans = planDebts(debts, leftOver);
+  const debtCost = debtPlans.reduce((total, plan) => total + plan.committed, 0);
 
   // Goals compete with debts for the same money, so they only get what's left.
   const freeForGoals = leftOver - debtCost;
 
   // Priority goals are filled first, so the total actually set aside is
   // whatever the allocator hands out — never more than there is.
-  const goalRows = allocateGoals(goals, freeForGoals);
+  // Goals are planned per paycheque, so they need to know how often you're paid
+  const payDays = period.weeks * 7;
+  const goalRows = allocateGoals(goals, freeForGoals, new Date(), payDays);
   // Same reasoning as debts above: what you've already put aside this month
   // counts, so saving doesn't leave you looking better off.
   const goalCost = goalRows.reduce((total, row) => total + row.committed, 0);
@@ -118,16 +120,21 @@ function App() {
   /* ---------- what the donut shows ----------
      Each slice carries the items inside it, so clicking one can open it up
      and show which subscription, debt or goal is taking the biggest share. */
+  // A four-week month's share of anything yearly — the same month the
+  // income above is measured in. Dividing by 12 here (calendar months) made
+  // the tax breakdown add up to MORE than the tax slice it was splitting.
+  const perMonth = (yearly) => (yearly / 52) * 4;
+
   const chartSlices = [
     {
       name: "Tax And Deductions",
       value: taxCost,
       parts: [
-        { name: "Federal Tax", value: deductions.federal / 12 },
-        { name: deductions.provinceName + " Tax", value: deductions.provincial / 12 },
-        { name: deductions.pensionLabel, value: deductions.cpp / 12 },
-        { name: "EI", value: deductions.ei / 12 },
-        { name: "QPIP", value: deductions.parental / 12 },
+        { name: "Federal Tax", value: perMonth(deductions.federal) },
+        { name: deductions.provinceName + " Tax", value: perMonth(deductions.provincial) },
+        { name: deductions.pensionLabel, value: perMonth(deductions.cpp) },
+        { name: "EI", value: perMonth(deductions.ei) },
+        { name: "QPIP", value: perMonth(deductions.parental) },
       ].filter((part) => part.value > 0),
     },
     {
@@ -138,9 +145,9 @@ function App() {
     {
       name: "Debt Payments",
       value: debtCost,
-      parts: debts.map((debt) => ({
+      parts: debts.map((debt, i) => ({
         name: debt.name,
-        value: planForDebt(debt, leftOver).committed,
+        value: debtPlans[i].committed,
       })),
     },
     {
@@ -293,6 +300,7 @@ function App() {
         <Goals
           goals={goals}
           freeMonthly={freeForGoals}
+          payDays={payDays}
           subs={subs}
           onAdd={add(setGoals, goals)}
           onEdit={edit(setGoals, goals)}

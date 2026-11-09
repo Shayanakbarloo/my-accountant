@@ -32,29 +32,32 @@ for (const r of rows) {
 
 check("priority goal is listed first", rows[0].title === "New Phone");
 check("priority is fully funded", rows[0].onTrack);
-/*  What a goal asks for this month is its share of the run: the days of
-    this month that fall inside the run, over all the days left in it,
-    counted from the 1st.
+/*  What a goal asks for is the same amount from every paycheque, in WHOLE
+    paycheques, counted from the 1st of this month. This month's target is
+    the two paycheques a four-week month holds when you're paid biweekly.
 
-    Two things are deliberate here. Counting from the 1st, not from today,
-    keeps the figure still all month — a rate recalculated from today
-    shrinks every time you pay into it, so saving made the app hand money
-    back as "free to spend". And splitting by actual days rather than whole
-    28-day blocks keeps it from over-asking: whole blocks ignored the
-    leftover days, demanded far more each month than the date needed, and
-    swallowed every spare dollar.                                        */
+    Two things are deliberate. Counting from the 1st keeps the figure still
+    all month — recalculated from today, it shrank every time you paid in,
+    and the app handed the difference back as "free to spend". And whole
+    paycheques keep it honest: an earlier version split the run by calendar
+    days, which added up on paper but implied "$429 every two weeks" for a
+    goal where five of those fall $170 short.                           */
 {
   const first = monthStart();
-  const afterThis = new Date(first.getFullYear(), first.getMonth() + 1, 1);
-  const runDays = Math.ceil((new Date(inMonths(3)) - first) / 86400000);
-  const monthDays = Math.min(
-    runDays,
-    Math.round((afterThis - first) / 86400000)
+  const [y, m, d] = inMonths(3).split("-").map(Number);
+  const runDays = Math.round(
+    (Date.UTC(y, m - 1, d) -
+      Date.UTC(first.getFullYear(), first.getMonth(), first.getDate())) /
+      86400000
   );
-  check("priority gets exactly its share of the run",
-    Math.abs(rows[0].gets - 2300 * (monthDays / runDays)) < 0.01);
-  check("the share is never more than the whole goal",
-    rows[0].target <= 2300 + 0.01);
+  const plan = perDeposit(2300, runDays, 14);
+  check("priority plans whole paycheques",
+    rows[0].perPaycheque === plan.amount && rows[0].paycheques === plan.deposits);
+  check("  and the paycheques add up to the goal",
+    rows[0].perPaycheque * rows[0].paycheques >= 2300 - 0.001);
+  check("  this month's target is two paycheques",
+    Math.abs(rows[0].target - Math.min(2300, plan.amount * 2)) < 0.01);
+  check("  and it gets all of it", Math.abs(rows[0].gets - rows[0].target) < 0.01);
 }
 check("other goal gets the remainder", Math.abs(rows[1].gets - (900 - rows[0].gets)) < 1);
 check("other goal is now behind", !rows[1].onTrack);
