@@ -32,22 +32,29 @@ for (const r of rows) {
 
 check("priority goal is listed first", rows[0].title === "New Phone");
 check("priority is fully funded", rows[0].onTrack);
-/*  What a goal asks for this month is its outstanding amount spread over
-    the whole 28-day periods left, counted from the 1st of this month.
+/*  What a goal asks for this month is its share of the run: the days of
+    this month that fall inside the run, over all the days left in it,
+    counted from the 1st.
 
-    It used to be a smooth rate from today — cost ÷ (days / 28). That was
-    changed on purpose: a rate recalculated from today shrinks every time
-    you pay into it, so saving made the app hand money back as "free to
-    spend". Pinned to the 1st, the target holds still all month.        */
+    Two things are deliberate here. Counting from the 1st, not from today,
+    keeps the figure still all month — a rate recalculated from today
+    shrinks every time you pay into it, so saving made the app hand money
+    back as "free to spend". And splitting by actual days rather than whole
+    28-day blocks keeps it from over-asking: whole blocks ignored the
+    leftover days, demanded far more each month than the date needed, and
+    swallowed every spare dollar.                                        */
 {
-  const fromFirst = Math.ceil(
-    (new Date(inMonths(3)) - monthStart()) / 86400000
+  const first = monthStart();
+  const afterThis = new Date(first.getFullYear(), first.getMonth() + 1, 1);
+  const runDays = Math.ceil((new Date(inMonths(3)) - first) / 86400000);
+  const monthDays = Math.min(
+    runDays,
+    Math.round((afterThis - first) / 86400000)
   );
-  const want = perDeposit(2300, fromFirst, 28).amount;
-  check("priority gets exactly what it needs",
-    Math.abs(rows[0].gets - want) < 0.01);
-  check("the target is whole deposits, not a fraction of one",
-    Math.abs(perDeposit(2300, fromFirst, 28).deposits % 1) < 1e-9);
+  check("priority gets exactly its share of the run",
+    Math.abs(rows[0].gets - 2300 * (monthDays / runDays)) < 0.01);
+  check("the share is never more than the whole goal",
+    rows[0].target <= 2300 + 0.01);
 }
 check("other goal gets the remainder", Math.abs(rows[1].gets - (900 - rows[0].gets)) < 1);
 check("other goal is now behind", !rows[1].onTrack);

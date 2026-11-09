@@ -120,13 +120,32 @@ export function allocateGoals(goals, available, today = new Date()) {
         spend. Pinned to the 1st, the target holds all month, so a deposit
         pays the target down instead of moving it.                        */
     const atMonthStart = Math.min(cost, remaining + putAside);
-    const daysInRun = Math.ceil((new Date(goal.date) - start) / MS_PER_DAY);
 
-    // Whole deposits, same rule as everywhere else — see perDeposit().
+    /*  This month's fair share: the days of this month that fall inside the
+        run, over all the days left in the run.
+
+        $2,315 due 21 Jan, counted from 1 Nov, is 81 days. November owns 30
+        of them, so November's share is 30/81 of the goal — $857. December
+        takes $886, the 21 days of January take $572, and the three add up
+        to exactly $2,315 on exactly the right day.
+
+        The earlier version split the run into whole 28-day months and
+        ignored the leftover days, which asked for $1,158 a month and
+        finished three weeks early. That sounds harmless until the goal is
+        big: chasing it swallowed every spare dollar, so Free To Spend read
+        $0 on a month where $229 was genuinely free.                      */
+    const daysInRun = Math.max(
+      1,
+      Math.ceil((new Date(goal.date) - start) / MS_PER_DAY)
+    );
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const daysThisMonth = Math.min(
+      daysInRun,
+      Math.round((nextMonth - start) / MS_PER_DAY)
+    );
+
     const target =
-      done || overdue
-        ? 0
-        : perDeposit(atMonthStart, daysInRun, DAYS_PER_MONTH).amount;
+      done || overdue ? 0 : atMonthStart * (daysThisMonth / daysInRun);
 
     // What's still to go this month, and what the pot can actually cover
     const stillThisMonth = Math.max(0, target - putAside);
@@ -139,21 +158,13 @@ export function allocateGoals(goals, available, today = new Date()) {
         up as less to spend, which is what actually happened.            */
     const committed = putAside + gets;
 
-    // How far this month came up short of the ideal pace
+    /*  Coming up short of this month's share now genuinely means falling
+        behind, because the share is sized to land on the date rather than
+        ahead of it. So there is one number here instead of two: the old
+        split between an "ideal" pace and a real minimum only existed to
+        paper over a target that was asking for too much.                */
     const shortfall = Math.max(0, stillThisMonth - gets);
-
-    /*  The least you can average each month and still arrive by the date.
-
-        `target` above is the IDEAL pace: whole months only, so it finishes
-        early and leaves a buffer. Falling below it is not the same thing as
-        missing the deadline, and the two were being treated as one. On a
-        $2,315 goal due 21 Jan, the ideal pace asks $1,158 a month while
-        $888 would do — so someone with $1,086 spare was told they were $72
-        short and should cancel a subscription, while the app's own
-        projection had them arriving two weeks early.                     */
-    const minimum = done || overdue ? 0 : remaining / Math.max(months, 0.1);
-    const gap = Math.max(0, minimum - committed);
-    const late = !done && !overdue && gap > 0.5;
+    const late = !done && !overdue && shortfall > 0.5;
 
     const onTrack = !overdue && !late;
 
@@ -191,11 +202,8 @@ export function allocateGoals(goals, available, today = new Date()) {
       gets,
       committed,
 
-      // Short of the ideal pace this month…
+      // What this month's share came up short by, if anything
       shortfall,
-      // …versus short of what the deadline actually demands
-      minimum,
-      gap,
       late,
 
       onTrack: done || onTrack,

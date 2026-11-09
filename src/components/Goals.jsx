@@ -4,7 +4,6 @@ import {
   allocateGoals,
   suggestCuts,
   listNames,
-  perDeposit,
 } from "../lib/goals.js";
 import {
   entryList,
@@ -72,8 +71,9 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
 
   // The saving month rolls over on the 1st. Nothing is stored for this —
   // each deposit carries its own date, so the figures reset on their own.
-  const thisMonthName = monthName();
-  const followingMonth = nextMonthName();
+  const now = new Date();
+  const thisMonthName = monthName(now);
+  const followingMonth = nextMonthName(now);
 
   function startEdit(goal) {
     setEditingId(goal.id);
@@ -109,7 +109,7 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
       is fine as long as the date still gets met. Telling someone to cancel
       a subscription they can afford is how a budgeting app loses trust. */
   const starved = rows.find((r) => r.late);
-  const advice = starved ? suggestCuts(starved.gap, subs) : null;
+  const advice = starved ? suggestCuts(starved.shortfall, subs) : null;
 
   return (
     <div>
@@ -222,22 +222,12 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                     <>
                       <div className="row-note warn">
                         Only {money(goal.committed)} Spare For It This Month —{" "}
-                        {money(goal.gap)} Short Of Making The Date.
+                        {money(goal.shortfall)} Short Of Making The Date.
                       </div>
                       <div className="row-note">
                         At This Rate You'd Have It By {goal.realDate}
                       </div>
                     </>
-                  )}
-
-                  {/*  Below the ideal pace but still arriving in time. Worth
-                       saying out loud, otherwise the gap between what's
-                       asked and what's spare looks like a problem.       */}
-                  {goal.onTrack && !goal.monthDone && goal.shortfall > 0.5 && (
-                    <div className="row-note good">
-                      {money(goal.committed)} Spare For It This Month — Under
-                      The Full Target, But Still In Time For {goal.date}
-                    </div>
                   )}
 
                   {/*  How much of the run is left, so the month sits in
@@ -248,10 +238,18 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                   {goal.onTrack && !goal.monthDone && (
                     <div className="row-note good">
                       {(() => {
-                        const d = perDeposit(goal.remaining, goal.daysLeft, 28);
-                        return `${d.deposits} ${
-                          d.deposits === 1 ? "Month" : "Months"
-                        } Of Saving Left`;
+                        /*  Calendar months, counted the way the plan
+                            actually splits the money. Counting 28-day
+                            blocks said "2 months" for a run that pays
+                            across November, December and January.      */
+                        const due = new Date(goal.date + "T00:00:00");
+                        const after =
+                          (due.getFullYear() - now.getFullYear()) * 12 +
+                          (due.getMonth() - now.getMonth());
+                        if (after <= 0) return "Due This Month";
+                        return `${after} More ${
+                          after === 1 ? "Month" : "Months"
+                        } After This One`;
                       })()}
                     </div>
                   )}
@@ -339,7 +337,7 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
         >
           <strong>To Get {starved.title} Back On Track</strong>
           <div style={{ marginTop: 6 }}>
-            You're {money(inView(starved.gap))} {v.label} Short Of Its Date.{" "}
+            You're {money(inView(starved.shortfall))} {v.label} Short Of Its Date.{" "}
             {advice.enough ? (
               <>
                 Cancelling <strong>{listNames(advice.cuts)}</strong> Would Free
@@ -368,7 +366,7 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
           }}
         >
           <strong>
-            {starved.title} Is Short {money(inView(starved.gap))} {v.label}
+            {starved.title} Is Short {money(inView(starved.shortfall))} {v.label}
           </strong>
           <div style={{ marginTop: 6 }}>
             There Are No Subscriptions To Cut, So The Options Are A Later Date,
