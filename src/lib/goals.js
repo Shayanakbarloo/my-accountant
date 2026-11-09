@@ -1,4 +1,5 @@
 import { monthlyCost } from "./subscriptions.js";
+import { entryList, sumEntries, thisMonth, monthStart } from "./entries.js";
 
 /*  Working out what each goal really gets.
 
@@ -22,6 +23,16 @@ export function totalSaved(goal) {
   return Number(goal.saved) || 0;
 }
 
+/**
+ * What's been put aside toward this goal in the month we're currently in.
+ *
+ * Deposits carried over from an older save have no date on them, so they
+ * count toward the total but not toward this month.
+ */
+export function savedThisMonth(goal, today = new Date()) {
+  return sumEntries(thisMonth(entryList(goal.deposits, goal.saved), today));
+}
+
 const MS_PER_DAY = 86400000;
 
 // The whole app treats a month as four weeks — monthly income is weekly × 4 —
@@ -35,10 +46,10 @@ function monthsUntil(dateString) {
   return days / DAYS_PER_MONTH;
 }
 
-function dateAfterMonths(months) {
+function dateAfterMonths(months, today = new Date()) {
   // Months here are four-week blocks, so step in days rather than
   // calendar months — otherwise the finish date drifts.
-  const d = new Date();
+  const d = new Date(today);
   d.setDate(d.getDate() + Math.ceil(months * DAYS_PER_MONTH));
   return d;
 }
@@ -53,8 +64,11 @@ function monthYear(date) {
  *
  * Returns one row per goal, in the order they should be shown:
  * priorities first, then the rest.
+ *
+ * `today` is injectable so the month-rollover behaviour can be tested
+ * without waiting for December.
  */
-export function allocateGoals(goals, available) {
+export function allocateGoals(goals, available, today = new Date()) {
   const pot = Math.max(0, available);
 
   const ordered = [
@@ -62,7 +76,18 @@ export function allocateGoals(goals, available) {
     ...goals.filter((g) => !g.priority),
   ];
 
-  let left = pot;
+  /*  Money already moved into savings this month has left your spending
+      money for good. Take it off the top before sharing out the rest, or
+      the same dollar gets handed out twice — once as savings, once as
+      money you're free to spend.                                        */
+  const alreadyPutAside = ordered.reduce(
+    (sum, goal) => sum + savedThisMonth(goal, today),
+    0
+  );
+
+  let left = Math.max(0, pot - alreadyPutAside);
+
+  const start = monthStart(today);
 
   return ordered.map((goal) => {
     const cost = Number(goal.cost) || 0;
@@ -70,27 +95,54 @@ export function allocateGoals(goals, available) {
     const remaining = cost - saved;
     const done = remaining <= 0;
 
-    const daysLeft = Math.ceil((new Date(goal.date) - new Date()) / MS_PER_DAY);
+    const putAside = Math.min(cost, savedThisMonth(goal, today));
+
+    const daysLeft = Math.ceil((new Date(goal.date) - today) / MS_PER_DAY);
     const months = daysLeft / DAYS_PER_MONTH;
     const overdue = !done && months <= 0;
 
-    // Based on what's LEFT, not the original price — so every deposit
-    // you record makes the next one smaller.
-    const needed = overdue || done ? 0 : remaining / Math.max(months, 0.1);
+    /*  This month's target is worked out from where the goal stood on the
+        1st — not from where it stands right now.
 
-    // What it actually gets, after anything above it has taken its share
-    const gets = Math.min(needed, left);
+        That distinction is the whole point. Recalculated after every
+        deposit, paying into a goal would shrink the very target it was
+        paying into: put $470 away and the app would quietly decide the goal
+        needed $178 less per month, then hand you that $178 back as money to
+        spend. Pinned to the 1st, the target holds all month, so a deposit
+        pays the target down instead of moving it.                        */
+    const atMonthStart = Math.min(cost, remaining + putAside);
+    const daysInRun = Math.ceil((new Date(goal.date) - start) / MS_PER_DAY);
+
+    // Whole deposits, same rule as everywhere else — see perDeposit().
+    const target =
+      done || overdue
+        ? 0
+        : perDeposit(atMonthStart, daysInRun, DAYS_PER_MONTH).amount;
+
+    // What's still to go this month, and what the pot can actually cover
+    const stillThisMonth = Math.max(0, target - putAside);
+    const gets = Math.min(stillThisMonth, left);
     left = Math.max(0, left - gets);
 
-    const shortfall = Math.max(0, needed - gets);
+    /*  Everything this goal takes out of this month's money: what you've
+        already put in, plus whatever still has to come. Overshoot the
+        target and this is simply what you put in — so saving extra shows
+        up as less to spend, which is what actually happened.            */
+    const committed = putAside + gets;
+
+    const shortfall = Math.max(0, stillThisMonth - gets);
     const onTrack = !overdue && shortfall < 0.5;
+
+    // This month's share is covered — but the goal itself isn't finished
+    // until the total is reached, which is what `done` tracks.
+    const monthDone = !done && !overdue && stillThisMonth < 0.5;
 
     // At the rate it's actually getting, when would it finish?
     let realDate = null;
     let realMonths = null;
-    if (!overdue && !done && gets > 0) {
-      realMonths = remaining / gets;
-      realDate = monthYear(dateAfterMonths(realMonths));
+    if (!overdue && !done && committed > 0) {
+      realMonths = remaining / committed;
+      realDate = monthYear(dateAfterMonths(realMonths, today));
     }
 
     return {
@@ -101,15 +153,26 @@ export function allocateGoals(goals, available) {
       progress: cost > 0 ? (saved / cost) * 100 : 0,
       overdue,
       daysLeft,
-      needed,
+
+      // ---- this month, which starts over on the 1st ----
+      putAside,
+      target,
+      stillThisMonth,
+      monthDone,
+
+      // Kept under its old name too: this month's target is what the
+      // "needs" wording has always meant.
+      needed: target,
+
       gets,
+      committed,
       shortfall,
       onTrack: done || onTrack,
-      stalled: !overdue && !done && gets <= 0,
+      stalled: !overdue && !done && !monthDone && gets <= 0,
       realDate,
       // How much later than asked, in months — only meaningful when behind
       monthsLate: realMonths && months > 0 ? Math.max(0, realMonths - months) : 0,
-      share: pot > 0 ? (gets / pot) * 100 : 0,
+      share: pot > 0 ? (committed / pot) * 100 : 0,
     };
   });
 }

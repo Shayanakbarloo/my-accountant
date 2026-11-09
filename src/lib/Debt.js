@@ -1,6 +1,18 @@
 // Works out what one debt demands each month.
 // Lives here rather than in the component so App can use it too.
 
+import { entryList, sumEntries, thisMonth, monthStart } from "./entries.js";
+
+/**
+ * What's been paid toward this debt in the month we're currently in.
+ *
+ * Payments carried over from an older save have no date on them, so they
+ * count toward the total but not toward this month.
+ */
+export function paidThisMonth(debt, today = new Date()) {
+  return sumEntries(thisMonth(entryList(debt.payments, debt.paid), today));
+}
+
 /**
  * What's been paid off so far.
  *
@@ -15,13 +27,23 @@ export function totalPaid(debt) {
   return Number(debt.paid) || 0;
 }
 
-export function planForDebt(debt, freeMonthly) {
+export function planForDebt(debt, freeMonthly, today = new Date()) {
   const original = Number(debt.balance) || 0;
 
   // What you've already paid off. Interest is charged on what's LEFT,
   // so every payment you record makes the next one cheaper.
   const paid = Math.min(original, Math.max(0, totalPaid(debt)));
   const balance = original - paid;
+
+  // Of that, what you've paid in the month we're in now
+  const paidNow = Math.min(original, paidThisMonth(debt, today));
+
+  /*  Where the debt stood on the 1st. The month's payment is worked out
+      from this rather than from today's balance — otherwise paying into
+      the debt would lower the very payment it was meant to be paying,
+      and the app would tell you that you had more money to spend for
+      having paid your credit card.                                      */
+  const atMonthStart = Math.min(original, balance + paidNow);
 
   const monthlyRate = (Number(debt.rate) || 0) / 100 / 12;
   const monthlyInterest = balance * monthlyRate;
@@ -38,6 +60,12 @@ export function planForDebt(debt, freeMonthly) {
       paid,
       balance: 0,
       progress: 100,
+      paidNow,
+      stillThisMonth: 0,
+      // Money really did leave your pocket this month, even on a debt
+      // that's now clear.
+      committed: paidNow,
+      monthDone: true,
     };
   }
 
@@ -45,8 +73,9 @@ export function planForDebt(debt, freeMonthly) {
   let fixedPayment = null; // set only when there's no deadline
 
   if (debt.date) {
-    // Deadline set: work backwards from it.
-    const msLeft = new Date(debt.date) - new Date();
+    // Deadline set: work backwards from it — from the start of this month,
+    // so the figure holds steady all month.
+    const msLeft = new Date(debt.date) - monthStart(today);
     months = Math.max(1, Math.ceil(msLeft / 2629800000)); // ms in a month
   } else {
     // No deadline: assume a quarter of spare money goes toward it.
@@ -63,6 +92,10 @@ export function planForDebt(debt, freeMonthly) {
         paid,
         balance,
         progress,
+        paidNow,
+        stillThisMonth: 0,
+        committed: paidNow,
+        monthDone: false,
       };
     }
     // With no deadline the payment is the thing you choose, so hold it
@@ -77,21 +110,31 @@ export function planForDebt(debt, freeMonthly) {
           Math.log(1 + monthlyRate);
   }
 
-  // With a deadline, the payment comes from the standard loan formula:
-  // each payment covers the interest first, then chips at the balance.
+  /*  With a deadline, the payment comes from the standard loan formula:
+      each payment covers the interest first, then chips at the balance.
+      Worked out on the balance as it stood on the 1st, so recording a
+      payment pays this month's figure down rather than shrinking it.    */
   const payment =
     fixedPayment !== null
       ? fixedPayment
       : monthlyRate === 0
-      ? balance / months
-      : (balance * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
+      ? atMonthStart / months
+      : (atMonthStart * monthlyRate) /
+        (1 - Math.pow(1 + monthlyRate, -months));
 
   // What the whole term costs at that payment. Named for the term, not
   // "totalPaid" — that's the helper up top, and a local of the same name
   // would shadow it everywhere in this function.
   const paidOverTerm = payment * months;
 
-  const payoff = new Date();
+  // What's still to pay this month, and everything this debt takes out of
+  // this month's money in total. Pay more than the figure asks and
+  // `committed` is simply what you paid — so the extra shows up as less
+  // left to spend, which is what actually happened.
+  const stillThisMonth = Math.max(0, payment - paidNow);
+  const committed = paidNow + stillThisMonth;
+
+  const payoff = new Date(today);
   payoff.setDate(payoff.getDate() + Math.ceil(months * 30.44));
 
   return {
@@ -109,7 +152,14 @@ export function planForDebt(debt, freeMonthly) {
       month: "long",
       year: "numeric",
     }),
-    share: freeMonthly > 0 ? (payment / freeMonthly) * 100 : 999,
+
+    // ---- this month, which starts over on the 1st ----
+    paidNow,
+    stillThisMonth,
+    committed,
+    monthDone: stillThisMonth < 0.5,
+
+    share: freeMonthly > 0 ? (committed / freeMonthly) * 100 : 999,
   };
 }
 

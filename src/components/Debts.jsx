@@ -6,6 +6,8 @@ import {
   addEntry,
   removeEntry,
   sumEntries,
+  monthName,
+  nextMonthName,
 } from "../lib/entries.js";
 import Entries from "./Entries.jsx";
 
@@ -85,6 +87,11 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
     0
   );
 
+  // The paying month rolls over on the 1st. Nothing is stored for this —
+  // each payment carries its own date, so the figures reset on their own.
+  const thisMonthName = monthName();
+  const followingMonth = nextMonthName();
+
   return (
     <div>
       <h3>What You Owe</h3>
@@ -120,11 +127,39 @@ function Debts({ debts, freeMonthly, onAdd, onEdit, onRemove }) {
                 </div>
               ) : (
                 <>
+                  {/*  This month's share. Worked out from the balance as it
+                       stood on the 1st, so a payment brings this line down
+                       rather than quietly lowering the figure itself.     */}
+                  <div className={`row-note${plan.monthDone ? " good" : ""}`}>
+                    {plan.paidNow > plan.payment + 0.5 ? (
+                      <>
+                        {thisMonthName}: {money(plan.paidNow)} Paid ✓ —{" "}
+                        {money(plan.paidNow - plan.payment)} More Than Asked
+                      </>
+                    ) : (
+                      <>
+                        {thisMonthName}: {money(plan.paidNow)} Of{" "}
+                        {money(plan.payment)} Paid
+                        {plan.monthDone
+                          ? " ✓"
+                          : ` · ${money(plan.stillThisMonth)} To Go This Month`}
+                      </>
+                    )}
+                  </div>
+
+                  {plan.monthDone && (
+                    <div className="row-note">
+                      Still {money(plan.balance)} Owed. Starts Again In{" "}
+                      {followingMonth}.
+                    </div>
+                  )}
+
                   <div
                     className={`row-note ${plan.share > 100 ? "bad" : "good"}`}
                   >
-                    {money(plan.payment)} A Month — Clear By {plan.payoffLabel}
+                    Keep That Up And It's Clear By {plan.payoffLabel}
                   </div>
+
                   {plan.interestPaid > 1 && (
                     <div className="row-note">
                       {money(plan.interestPaid)} Of That Is Interest

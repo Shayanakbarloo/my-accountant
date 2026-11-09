@@ -92,9 +92,14 @@ function App() {
   const subsTotal = subs.reduce((total, sub) => total + monthlyCost(sub), 0);
   const leftOver = takeHomeMonthly - subsTotal;
 
-  // What every debt costs you each month, added up.
+  /*  What every debt costs you each month, added up.
+
+      `committed`, not `payment`: it counts what you've already paid this
+      month as well as what's still to go. Using `payment` alone meant a
+      payment you'd already made was never taken out of this month's
+      money, so paying your card made the app think you were richer.    */
   const debtCost = debts.reduce(
-    (total, debt) => total + planForDebt(debt, leftOver).payment,
+    (total, debt) => total + planForDebt(debt, leftOver).committed,
     0
   );
 
@@ -104,7 +109,9 @@ function App() {
   // Priority goals are filled first, so the total actually set aside is
   // whatever the allocator hands out — never more than there is.
   const goalRows = allocateGoals(goals, freeForGoals);
-  const goalCost = goalRows.reduce((total, row) => total + row.gets, 0);
+  // Same reasoning as debts above: what you've already put aside this month
+  // counts, so saving doesn't leave you looking better off.
+  const goalCost = goalRows.reduce((total, row) => total + row.committed, 0);
 
   const trulyFree = freeForGoals - goalCost;
 
@@ -133,7 +140,7 @@ function App() {
       value: debtCost,
       parts: debts.map((debt) => ({
         name: debt.name,
-        value: planForDebt(debt, leftOver).payment,
+        value: planForDebt(debt, leftOver).committed,
       })),
     },
     {
@@ -141,7 +148,7 @@ function App() {
       value: goalCost,
       parts: goalRows.map((row) => ({
         name: row.priority ? "★ " + row.title : row.title,
-        value: row.gets,
+        value: row.committed,
       })),
     },
     // Nothing to break this one into — it's whatever is left.

@@ -1,5 +1,6 @@
 // Run with: node src/lib/goals.test.js
-import { allocateGoals, suggestCuts, listNames } from "./goals.js";
+import { allocateGoals, suggestCuts, listNames, perDeposit } from "./goals.js";
+import { monthStart } from "./entries.js";
 
 let failed = 0;
 const check = (label, ok) => {
@@ -31,13 +32,22 @@ for (const r of rows) {
 
 check("priority goal is listed first", rows[0].title === "New Phone");
 check("priority is fully funded", rows[0].onTrack);
-// A month here is four weeks, so ~92 days is 3.29 months, not 3.
-// $2,300 / 3.29 = about $700. Checked against the same arithmetic
-// rather than a hardcoded number, so it survives the date moving.
+/*  What a goal asks for this month is its outstanding amount spread over
+    the whole 28-day periods left, counted from the 1st of this month.
+
+    It used to be a smooth rate from today — cost ÷ (days / 28). That was
+    changed on purpose: a rate recalculated from today shrinks every time
+    you pay into it, so saving made the app hand money back as "free to
+    spend". Pinned to the 1st, the target holds still all month.        */
 {
-  const d = Math.ceil((new Date(inMonths(3)) - new Date()) / 86400000);
+  const fromFirst = Math.ceil(
+    (new Date(inMonths(3)) - monthStart()) / 86400000
+  );
+  const want = perDeposit(2300, fromFirst, 28).amount;
   check("priority gets exactly what it needs",
-    Math.abs(rows[0].gets - 2300 / (d / 28)) < 0.01);
+    Math.abs(rows[0].gets - want) < 0.01);
+  check("the target is whole deposits, not a fraction of one",
+    Math.abs(perDeposit(2300, fromFirst, 28).deposits % 1) < 1e-9);
 }
 check("other goal gets the remainder", Math.abs(rows[1].gets - (900 - rows[0].gets)) < 1);
 check("other goal is now behind", !rows[1].onTrack);
@@ -90,24 +100,32 @@ check("impossible gap admits it isn't enough", huge.enough === false);
 
 check("no subs -> no suggestion", suggestCuts(50, []) === null);
 check("no shortfall -> no suggestion", suggestCuts(0, subs) === null);
-// ---- the month convention must match the rest of the app ----
-// A month is four weeks everywhere, so two weeks is exactly half a month
-// and one week is exactly a quarter. If these drift, the Goals view
-// disagrees with every other figure on the page.
-const yr = allocateGoals(
-  [{ id: 99, title: "Year Goal", cost: 8000, date: inMonths(12) }],
-  99999
-)[0];
-const perMonth = yr.needed;
-const days = Math.ceil((new Date(inMonths(12)) - new Date()) / 86400000);
-console.log(`\n$8,000 over ${days} days:`);
-console.log(`  per month (4 weeks): $${perMonth.toFixed(2)}`);
-console.log(`  half of that:        $${(perMonth / 2).toFixed(2)}`);
-console.log(`  true 14-day figure:  $${(8000 / (days / 14)).toFixed(2)}`);
-check("a month is 4 weeks, so halving it gives the true 14-day figure",
-  Math.abs(perMonth / 2 - 8000 / (days / 14)) < 0.01);
-check("a quarter of it gives the true 7-day figure",
-  Math.abs(perMonth / 4 - 8000 / (days / 7)) < 0.01);
+/*  ---- the month convention must match the rest of the app ----
+
+    A month is four weeks everywhere, so two weeks is exactly half a month
+    and one week exactly a quarter. If these drift, the Goals view
+    disagrees with every other figure on the page.
+
+    Checked over 56 days — a whole number of all three periods — so the
+    rounding to whole deposits can't blur what's being asserted.        */
+const m = perDeposit(8000, 56, 28);
+const f = perDeposit(8000, 56, 14);
+const w = perDeposit(8000, 56, 7);
+console.log(`\n$8,000 over 56 days:`);
+console.log(`  ${m.deposits} monthly  x $${m.amount.toFixed(2)}`);
+console.log(`  ${f.deposits} biweekly x $${f.amount.toFixed(2)}`);
+console.log(`  ${w.deposits} weekly   x $${w.amount.toFixed(2)}`);
+check("56 days is 2 months", m.deposits === 2);
+check("a month is 4 weeks, so two weeks is half of one",
+  f.deposits === 2 * m.deposits && Math.abs(f.amount * 2 - m.amount) < 0.01);
+check("and one week is a quarter of one",
+  w.deposits === 4 * m.deposits && Math.abs(w.amount * 4 - m.amount) < 0.01);
+
+// Every period must still deliver the whole goal, however it's sliced
+for (const [name, p] of [["monthly", m], ["biweekly", f], ["weekly", w]]) {
+  check(`${name} deposits add up to the goal`,
+    Math.abs(p.deposits * p.amount - 8000) < 0.01);
+}
 
 // ---- whole deposits, not a fractional rate ----
 // $2,350 by 21 Jan 2027 from 7 Nov 2026 is 75 days — 5.36 fortnights.

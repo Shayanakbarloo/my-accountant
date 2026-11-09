@@ -57,6 +57,51 @@ export function sumEntries(list) {
   return list.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
 }
 
+/*  ---- Which month an entry belongs to ----
+
+    Saving is a monthly habit, not a one-off. Putting $800 aside in November
+    shouldn't make December look handled, so these pick out the entries that
+    belong to the month you're actually in. Nothing is stored and nothing has
+    to be reset: the month rolls over on its own because these read the date
+    on each entry against today.                                           */
+
+/** The first day of the month `today` falls in. */
+export function monthStart(today = new Date()) {
+  return new Date(today.getFullYear(), today.getMonth(), 1);
+}
+
+/** "November" — the month the current figures belong to. */
+export function monthName(today = new Date()) {
+  return today.toLocaleDateString("en-US", { month: "long" });
+}
+
+/** "December" — the month the figures start over in. */
+export function nextMonthName(today = new Date()) {
+  return new Date(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    1
+  ).toLocaleDateString("en-US", { month: "long" });
+}
+
+/**
+ * Only the entries dated in the month `today` falls in.
+ *
+ * Amounts carried over from an older save have no date, so they count
+ * toward the total but not toward this month — which is right, since
+ * there's no telling when they were put in.
+ */
+export function thisMonth(entries, today = new Date()) {
+  const year = today.getFullYear();
+  const month = today.getMonth();
+
+  return entries.filter((entry) => {
+    if (!entry.at) return false;
+    const [y, m] = entry.at.split("-").map(Number);
+    return y === year && m - 1 === month;
+  });
+}
+
 /** "Nov 7" — or "Earlier", for amounts from before entries were kept. */
 export function entryDate(at) {
   if (!at) return "Earlier";

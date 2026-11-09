@@ -11,6 +11,8 @@ import {
   addEntry,
   removeEntry,
   sumEntries,
+  monthName,
+  nextMonthName,
 } from "../lib/entries.js";
 import Entries from "./Entries.jsx";
 
@@ -67,6 +69,11 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
   const v = VIEWS[view];
   // Turns a monthly figure into whichever period is being shown
   const inView = (perMonth) => perMonth * v.perMonth;
+
+  // The saving month rolls over on the 1st. Nothing is stored for this —
+  // each deposit carries its own date, so the figures reset on their own.
+  const thisMonthName = monthName();
+  const followingMonth = nextMonthName();
 
   function startEdit(goal) {
     setEditingId(goal.id);
@@ -157,38 +164,82 @@ function Goals({ goals, freeMonthly, subs, onAdd, onEdit, onRemove }) {
                 <div className="row-note warn">
                   That Date Has Passed — Pick A New One.
                 </div>
-              ) : goal.stalled ? (
-                <div className="row-note bad">
-                  Nothing Left To Put Toward This. It Needs{" "}
-                  {money(inView(goal.needed))} {v.label}.
-                </div>
               ) : goal.done ? (
                 <div className="row-note good">
                   ★ Fully Saved — You Can Buy It.
                 </div>
-              ) : goal.onTrack ? (
-                (() => {
-                  // Based on what's LEFT, so each deposit you record makes
-                  // the next one smaller. Whole deposits, not a fraction of
-                  // one — see perDeposit().
-                  const d = perDeposit(goal.remaining, goal.daysLeft, v.days);
-                  return (
-                    <div className="row-note good">
-                      Save {money(d.amount)} Every {v.each} — {d.deposits}{" "}
-                      {d.deposits === 1 ? "Payment" : "Payments"} ×{" "}
-                      {money(d.amount)} = {money(goal.remaining)}
-                    </div>
-                  );
-                })()
               ) : (
                 <>
-                  <div className="row-note warn">
-                    Getting {money(inView(goal.gets))} {v.label}, Needs{" "}
-                    {money(inView(goal.needed))}
+                  {/*  This month's share. The target is set from where the
+                       goal stood on the 1st and holds all month, so paying
+                       into it brings this line down instead of moving it. */}
+                  <div className={`row-note${goal.monthDone ? " good" : ""}`}>
+                    {goal.putAside > goal.target + 0.5 ? (
+                      <>
+                        {thisMonthName}: {money(goal.putAside)} Put Aside ✓ —{" "}
+                        {money(goal.putAside - goal.target)} More Than Asked
+                      </>
+                    ) : (
+                      <>
+                        {thisMonthName}: {money(goal.putAside)} Of{" "}
+                        {money(goal.target)} Put Aside
+                        {goal.monthDone
+                          ? " ✓"
+                          : ` · ${money(goal.stillThisMonth)} To Go This Month`}
+                      </>
+                    )}
                   </div>
-                  <div className="row-note">
-                    At This Rate You'd Have It By {goal.realDate}
-                  </div>
+
+                  {/*  Covering the month is not finishing the goal — say so
+                       plainly, or one good month reads like the end of it. */}
+                  {goal.monthDone && (
+                    <div className="row-note">
+                      Not Finished Yet — {money(goal.remaining)} Left On The
+                      Goal. Starts Again In {followingMonth}.
+                    </div>
+                  )}
+
+                  {/* The same target, in whichever period you picked */}
+                  {view !== "month" && !goal.monthDone && (
+                    <div className="row-note">
+                      That's {money(inView(goal.target))} Every {v.each} —{" "}
+                      {money(inView(goal.stillThisMonth))} Of It Still To Go
+                    </div>
+                  )}
+
+                  {goal.stalled && (
+                    <div className="row-note bad">
+                      Nothing Spare To Put Toward This Month.
+                    </div>
+                  )}
+
+                  {!goal.stalled && !goal.onTrack && (
+                    <>
+                      <div className="row-note warn">
+                        Only {money(goal.gets)} Spare For It This Month —{" "}
+                        {money(goal.shortfall)} Short.
+                      </div>
+                      <div className="row-note">
+                        At This Rate You'd Have It By {goal.realDate}
+                      </div>
+                    </>
+                  )}
+
+                  {/*  How much of the run is left, so the month sits in
+                       context. Deliberately no dollar figure here: this
+                       month's target was set from the 1st, and a second,
+                       freshly-recalculated rate alongside it would just
+                       look like the app contradicting itself.           */}
+                  {goal.onTrack && !goal.monthDone && (
+                    <div className="row-note good">
+                      {(() => {
+                        const d = perDeposit(goal.remaining, goal.daysLeft, 28);
+                        return `${d.deposits} ${
+                          d.deposits === 1 ? "Month" : "Months"
+                        } Of Saving Left`;
+                      })()}
+                    </div>
+                  )}
                 </>
               )}
 

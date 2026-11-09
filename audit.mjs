@@ -3,7 +3,7 @@ import { monthlyCost, describe } from "./src/lib/subscriptions.js";
 import { planForDebt } from "./src/lib/Debt.js";
 import { allocateGoals, perDeposit, totalSaved } from "./src/lib/goals.js";
 import { totalPaid } from "./src/lib/Debt.js";
-import { entryList, addEntry, removeEntry, sumEntries } from "./src/lib/entries.js";
+import { entryList, addEntry, removeEntry, sumEntries, monthStart } from "./src/lib/entries.js";
 
 let bad = 0;
 const eq = (label, got, want, tol = 0.01) => {
@@ -85,7 +85,16 @@ const days = Math.ceil((new Date("2027-01-21") - new Date())/864e5);
 console.log(`  (${days} days away)`);
 const g = allocateGoals([{id:1,title:"iPhone",cost:2350,date:"2027-01-21"}], 99999)[0];
 eq("daysLeft", g.daysLeft, days, 1);
-eq("needed per 28-day month", g.needed, 2350/(days/28));
+
+// This month's target is set from where the goal stood on the 1st, over the
+// whole 28-day periods left from then — not from today, and not as a
+// fraction of a period. Pinning it to the 1st is what stops a deposit
+// shrinking the target it is paying into.
+const fromFirst = Math.ceil((new Date("2027-01-21") - monthStart()) / 864e5);
+eq("this month's target", g.target, perDeposit(2350, fromFirst, 28).amount);
+eq("  nothing put aside yet", g.putAside, 0);
+eq("  so it's all still to go", g.stillThisMonth, g.target);
+eq("  and the month isn't covered", g.monthDone ? 1 : 0, 0);
 for (const [name, pd] of [["weekly",7],["biweekly",14],["monthly",28]]) {
   const p = perDeposit(2350, days, pd);
   eq(`${name}: ${p.deposits} x amount = goal`, p.deposits * p.amount, 2350);
@@ -171,6 +180,71 @@ const before = planForDebt({ balance: 2400, rate: 19.99, date: null }, 2000).pay
 const after = planForDebt({ balance: 2400, rate: 19.99, date: null,
   payments: [{ id: "a", amount: 600 }] }, 2000).payment;
 eq("paying extra holds the payment steady", after, before);
+
+console.log("\n" + "=".repeat(62));
+console.log("8. THE MONTHLY CYCLE  (saving must not make you look richer)");
+console.log("=".repeat(62));
+
+// The bug this guards against: a deposit shrank what the goal needed per
+// month, and the money actually moved was never taken out of that month's
+// budget — so putting $470 aside handed back $178 to spend.
+const NOV = new Date(2026, 10, 8);
+const DEC = new Date(2026, 11, 3);
+const pot = 3115.30;
+const dep = (amount, at) => ({ id: at + amount, amount, at });
+
+const freeWith = (deposits, when) => {
+  const rows = allocateGoals(
+    [{ id: 1, title: "iPhone", cost: 2350, date: "2027-01-21", deposits }],
+    pot, when
+  );
+  return { free: pot - rows.reduce((t, r) => t + r.committed, 0), row: rows[0] };
+};
+
+const none = freeWith([], NOV);
+const one = freeWith([dep(470, "2026-11-08")], NOV);
+const two = freeWith([dep(470, "2026-11-08"), dep(470, "2026-11-12")], NOV);
+
+eq("free to spend, nothing saved", none.free, 1940.30);
+eq("free to spend after $470 put aside", one.free, none.free);
+eq("free to spend after $940 put aside", two.free, none.free);
+eq("  this month's target held still", two.row.target, none.row.target);
+eq("  and the deposits count toward it", two.row.putAside, 940);
+
+// Going past the month's target really does leave less to spend
+const over = [dep(470,"2026-11-08"), dep(470,"2026-11-12"),
+              dep(470,"2026-11-15"), dep(470,"2026-11-20")];
+const big = freeWith(over, NOV);
+eq("overshooting leaves less to spend", big.free, none.free - (1880 - 1175));
+eq("  month shows as covered", big.row.monthDone ? 1 : 0, 1);
+eq("  but the goal is NOT done", big.row.done ? 1 : 0, 0);
+
+// December starts over on its own — no stored state, no reset to run
+const dec = freeWith(over, DEC);
+eq("December: nothing put aside yet", dec.row.putAside, 0);
+eq("  a fresh target appears", dec.row.target > 0 ? 1 : 0, 1);
+eq("  month no longer counted as covered", dec.row.monthDone ? 1 : 0, 0);
+eq("  total saved carries over", dec.row.saved, 1880);
+eq("  still not done", dec.row.done ? 1 : 0, 0);
+
+// Done means the whole goal, never one good month
+const finished = freeWith([...over, dep(470, "2026-12-01")], DEC);
+eq("done only when the total is reached", finished.row.done ? 1 : 0, 1);
+
+// Undated money from an older save counts to the total, not to this month
+const carried = freeWith([{ id: "earlier", amount: 700, at: null }], NOV);
+eq("older save counts to the total", carried.row.saved, 700);
+eq("  but not to this month", carried.row.putAside, 0);
+
+// Debts, the same way
+const payDebt = (payments, when) =>
+  planForDebt({ balance: 2400, rate: 19.99, date: "2027-06-01", payments }, 3000, when);
+const dNone = payDebt([], NOV);
+const dPaid = payDebt([dep(200, "2026-11-08")], NOV);
+eq("debt: monthly figure holds still", dPaid.payment, dNone.payment);
+eq("debt: committed unchanged by paying", dPaid.committed, dNone.committed);
+eq("debt: payment counts toward the month", dPaid.paidNow, 200);
+eq("debt: December starts over", payDebt([dep(200, "2026-11-08")], DEC).paidNow, 0);
 
 console.log("\n" + "=".repeat(62));
 console.log(bad === 0 ? "EVERY CHECK PASSED" : `${bad} PROBLEM(S) FOUND`);
